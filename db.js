@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V1";
-  const timeKey = "perfumeDB_Warehouse_Time_V1";
+  const cacheKey = "perfumeDB_Warehouse_Data_V4";
+  const timeKey = "perfumeDB_Warehouse_Time_V4";
 
   const now = new Date().getTime();
   const cachedTime = localStorage.getItem(timeKey);

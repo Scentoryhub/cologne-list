@@ -719,6 +719,11 @@
         line-height: 1;
         white-space: nowrap;
       }
+      .warehouse-tag.multi-warehouse {
+        border-color: #d2ad32;
+        background: #fff8d8;
+        color: #5e4700;
+      }
 
       .action-qty-box {
         display: flex;
@@ -1217,6 +1222,91 @@
         font-family: Georgia, serif;
         font-style: italic;
       }
+      .warehouse-choice-content {
+        max-width: 420px;
+        padding: 28px 22px 22px;
+        border: 1px solid #d4ad22;
+        text-align: left;
+      }
+      .warehouse-choice-eyebrow {
+        margin: 0 0 6px;
+        color: #9a7300;
+        font-size: 0.72rem;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .warehouse-choice-title {
+        margin: 0;
+        color: #111;
+        font-size: 1.35rem;
+        line-height: 1.2;
+      }
+      .warehouse-choice-copy {
+        margin: 8px 0 16px;
+        color: #69645a;
+        font-size: 0.86rem;
+        line-height: 1.45;
+      }
+      .warehouse-choice-options {
+        display: grid;
+        gap: 9px;
+      }
+      .warehouse-choice-option {
+        width: 100%;
+        min-height: 64px;
+        padding: 11px 13px;
+        border: 1px solid #d8d3c9;
+        border-radius: 8px;
+        background: #fff;
+        color: #171717;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .warehouse-choice-option.selected {
+        border: 2px solid #111;
+        background: #fff9dc;
+        box-shadow: inset 5px 0 0 #e1b800;
+      }
+      .warehouse-choice-option-main {
+        display: grid;
+        gap: 3px;
+      }
+      .warehouse-choice-option strong {
+        font-size: 1rem;
+      }
+      .warehouse-choice-sku {
+        color: #777168;
+        font-size: 0.72rem;
+      }
+      .warehouse-recommended {
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: #111;
+        color: #ffd700;
+        font-size: 0.64rem;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .warehouse-choice-confirm {
+        width: 100%;
+        min-height: 48px;
+        margin-top: 14px;
+        border: 0;
+        border-radius: 7px;
+        background: #111;
+        color: #fff;
+        font: inherit;
+        font-size: 0.95rem;
+        font-weight: 900;
+        cursor: pointer;
+      }
       .gender-tag {
         display: inline-block;
         font-size: 0.7rem;
@@ -1556,6 +1646,34 @@
       </div>
     </div>
 
+    <div id="warehouse-choice-modal" class="modal" aria-hidden="true">
+      <div class="modal-content warehouse-choice-content">
+        <button
+          type="button"
+          class="modal-close"
+          aria-label="Close warehouse selection"
+          onclick="closeWarehouseChoice()"
+        >
+          &times;
+        </button>
+        <p class="warehouse-choice-eyebrow">Choose fulfillment warehouse</p>
+        <h3 id="warehouse-choice-title" class="warehouse-choice-title"></h3>
+        <p id="warehouse-choice-copy" class="warehouse-choice-copy"></p>
+        <div
+          id="warehouse-choice-options"
+          class="warehouse-choice-options"
+        ></div>
+        <button
+          id="warehouse-choice-confirm"
+          type="button"
+          class="warehouse-choice-confirm"
+          onclick="confirmWarehouseChoice()"
+        >
+          Add to Cart
+        </button>
+      </div>
+    </div>
+
     <div class="modal" id="policy-modal">
       <div
         class="modal-content"
@@ -1641,6 +1759,10 @@
       let currentGridData = [];
       let viewMode = "home";
       let currentModalProductId = null;
+      let activeWarehouseCode = "TX";
+      let pendingWarehouseProductId = null;
+      let selectedWarehouseCode = null;
+      let recommendedWarehouseCode = null;
 
       document.addEventListener("DOMContentLoaded", () => {
         loadCart();
@@ -1694,13 +1816,17 @@
       }
 
       function formatProductPrice(product) {
-        return hasValidPrice(product)
-          ? `$${Number(product.price).toFixed(2)}`
+        const pricedVariant = getProductVariants(product).find(hasValidPrice);
+        return pricedVariant
+          ? `$${Number(pricedVariant.price).toFixed(2)}`
           : '<span class="price-pending-label">Price Pending</span>';
       }
 
       function getProductImage(product) {
-        return (product && product.img) || DEFAULT_PRODUCT_IMAGE;
+        const imageVariant = getProductVariants(product).find(
+          (variant) => variant && variant.img,
+        );
+        return (imageVariant && imageVariant.img) || DEFAULT_PRODUCT_IMAGE;
       }
 
       window.handleProductImageError = function (image) {
@@ -1714,6 +1840,94 @@
       function getWarehouseLabel(product) {
         const code = normalizeWarehouseCode(product && product.warehouse);
         return WAREHOUSE_LABELS[code] || (product && product.warehouse) || "";
+      }
+
+      function getProductVariants(product) {
+        if (!product) return [];
+        return Array.isArray(product._variants) && product._variants.length > 0
+          ? product._variants
+          : [product];
+      }
+
+      function getSelectableWarehouseVariants(product) {
+        const bestByWarehouse = new Map();
+        getProductVariants(product)
+          .filter(isProductAvailable)
+          .forEach((variant) => {
+            const code = normalizeWarehouseCode(variant.warehouse);
+            if (!WAREHOUSE_LABELS[code]) return;
+            const existing = bestByWarehouse.get(code);
+            if (!existing || (!hasValidPrice(existing) && hasValidPrice(variant))) {
+              bestByWarehouse.set(code, variant);
+            }
+          });
+        return WAREHOUSE_ORDER.map((code) => bestByWarehouse.get(code)).filter(
+          Boolean,
+        );
+      }
+
+      function getProductAvailabilityHtml(product) {
+        const codes = getSelectableWarehouseVariants(product).map((variant) =>
+          normalizeWarehouseCode(variant.warehouse),
+        );
+        if (codes.length > 1) {
+          return `<span class="warehouse-tag multi-warehouse">Available in ${codes.join(" & ")}</span>`;
+        }
+        return `<span class="warehouse-tag">${codes.length ? WAREHOUSE_LABELS[codes[0]] : getWarehouseLabel(product)}</span>`;
+      }
+
+      function getProductDisplayTitle(product) {
+        return getSelectableWarehouseVariants(product).length > 1
+          ? String(product.name || "")
+          : `${product.id}-${product.name}`;
+      }
+
+      function groupProductsForDisplay(matches, universe) {
+        const keyedVariants = new Map();
+        (universe || matches).forEach((product) => {
+          const key = String(product.product_key || "").trim();
+          if (!key) return;
+          if (!keyedVariants.has(key)) keyedVariants.set(key, []);
+          keyedVariants.get(key).push(product);
+        });
+
+        const seen = new Set();
+        const grouped = [];
+        matches.forEach((product) => {
+          const key = String(product.product_key || "").trim();
+          const identity = key ? `key:${key}` : `sku:${product.id}`;
+          if (seen.has(identity)) return;
+          seen.add(identity);
+
+          if (!key) {
+            grouped.push(product);
+            return;
+          }
+
+          const variants = keyedVariants.get(key) || [product];
+          const displayVariant =
+            variants.find((variant) => variant.id === product.id) ||
+            variants.find(hasValidPrice) ||
+            variants[0];
+          grouped.push({
+            ...displayVariant,
+            _variants: variants,
+            _productKey: key,
+          });
+        });
+        return grouped;
+      }
+
+      function getRenderableProductById(id) {
+        if (viewMode === "grid") {
+          const gridProduct = currentGridData.find(
+            (product) => String(product.id) === String(id),
+          );
+          if (gridProduct) return gridProduct;
+        }
+        return (window.perfumeDB || []).find(
+          (product) => String(product.id) === String(id),
+        );
       }
 
       function getStockHtml(inventory) {
@@ -1932,18 +2146,15 @@
           return;
         }
 
-        const expandedCodes = new Set(
-          Array.from(container.querySelectorAll(".warehouse-group.expanded"))
-            .map((group) => group.dataset.warehouse),
+        const availableWarehouseCodes = WAREHOUSE_ORDER.filter((code) =>
+          products.some(
+            (product) => normalizeWarehouseCode(product.warehouse) === code,
+          ),
         );
-        const activeWarehouseCode =
-          WAREHOUSE_ORDER.find((code) => expandedCodes.has(code)) ||
-          WAREHOUSE_ORDER.find((code) =>
-            products.some(
-              (product) => normalizeWarehouseCode(product.warehouse) === code,
-            ),
-          ) ||
-          WAREHOUSE_ORDER[0];
+        if (!availableWarehouseCodes.includes(activeWarehouseCode)) {
+          activeWarehouseCode =
+            availableWarehouseCodes[0] || WAREHOUSE_ORDER[0];
+        }
         container.innerHTML = "";
 
         WAREHOUSE_ORDER.forEach((code) => {
@@ -1978,13 +2189,9 @@
             String(group.classList.contains("expanded")),
           );
           toggle.onclick = () => {
-            container.querySelectorAll(".warehouse-group").forEach((item) => {
-              item.classList.remove("expanded");
-              const itemToggle = item.querySelector(".warehouse-toggle");
-              if (itemToggle) itemToggle.setAttribute("aria-expanded", "false");
-            });
-            group.classList.add("expanded");
-            toggle.setAttribute("aria-expanded", "true");
+            if (activeWarehouseCode === code) return;
+            activeWarehouseCode = code;
+            if (viewMode === "home") renderHome();
           };
           group.appendChild(toggle);
 
@@ -2069,22 +2276,32 @@
         return `<div class="img-wrapper skeleton-loader"><picture><source srcset="${webpSrc}" type="image/webp"><img src="${imageSrc}" alt="${alt}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded'); this.parentElement.parentElement.classList.remove('skeleton-loader');" onerror="handleProductImageError(this); this.parentElement.parentElement.classList.remove('skeleton-loader');"></picture></div>`;
       }
 
-      function getCartQty(id) {
-        const item = cartItems.find((c) => c.name === id);
-        return item ? item.quantity : 0;
+      function getCartQtyForProduct(product) {
+        const variantIds = new Set(
+          getProductVariants(product).map((variant) => String(variant.id)),
+        );
+        return cartItems.reduce(
+          (total, item) =>
+            total +
+            (variantIds.has(String(item.name)) ? Number(item.quantity) || 0 : 0),
+          0,
+        );
       }
 
       function getAddButtonHtml(id) {
-        const product = (window.perfumeDB || []).find((item) => item.id === id);
-        if (!hasValidPrice(product)) {
+        const product = getRenderableProductById(id);
+        const variants = getSelectableWarehouseVariants(product);
+        if (!variants.some(hasValidPrice)) {
           return '<div class="price-pending-action">Available after pricing</div>';
         }
-        const qty = getCartQty(id);
+        const qty = getCartQtyForProduct(product);
+        if (variants.length > 1) {
+          const label = qty > 0 ? `${qty} IN CART · ADD MORE` : "ADD TO CART";
+          return `<button class="action-btn-black" onclick="openWarehouseChoiceById('${id}'); event.stopPropagation();">${label}</button>`;
+        }
         if (qty === 0) {
-          // State 0: Large Black Button
           return `<button class="action-btn-black" onclick="updateItemQty('${id}', 1); event.stopPropagation();">ADD TO CART</button>`;
         } else {
-          // State >0: Rectangular Control Box
           return `
                 <div class="action-qty-box">
                     <div class="qty-btn-rect" onclick="updateItemQty('${id}', -1); event.stopPropagation();">-</div>
@@ -2096,14 +2313,29 @@
 
       // --- Home Render Logic ---
       function renderHome() {
-        const db = (window.perfumeDB || []).filter(isProductAvailable);
+        const db = (window.perfumeDB || []).filter(
+          (product) =>
+            isProductAvailable(product) &&
+            normalizeWarehouseCode(product.warehouse) === activeWarehouseCode,
+        );
         const container = document.getElementById("home-content");
         if (!container) return;
         container.innerHTML = "";
         renderWarehouseMenu();
 
+        const getWarehouseCriteria = (filterKey) => {
+          if (filterKey === "Other") return `WarehouseOther:${activeWarehouseCode}`;
+          if (filterKey === "Sale") return `WarehouseSale:${activeWarehouseCode}`;
+          if (filterKey === "Set") return `WarehouseSet:${activeWarehouseCode}`;
+          return `WarehouseBrand:${activeWarehouseCode}:${encodeURIComponent(filterKey)}`;
+        };
+
         const renderSection = (title, items, filterKey) => {
-          const section = createBrandSection(title, items, filterKey);
+          const section = createBrandSection(
+            title,
+            items,
+            getWarehouseCriteria(filterKey),
+          );
           if (filterKey && !["Sale"].includes(filterKey)) {
             section.id = "brand-" + filterKey.replace(/\s+/g, "");
           }
@@ -2135,7 +2367,7 @@
           const otherSection = createBrandSection(
             "Other Brands",
             otherProducts,
-            "Other",
+            `WarehouseOther:${activeWarehouseCode}`,
           );
           otherSection.id = "brand-Other";
           container.appendChild(otherSection);
@@ -2215,7 +2447,10 @@
           const genderHtml = p.gender
             ? `<span class="gender-tag ${genderClass}">${p.gender}</span>`
             : "";
-          const stockHtml = getStockHtml(p.inventory);
+          const stockHtml =
+            getSelectableWarehouseVariants(p).length > 1
+              ? ""
+              : getStockHtml(p.inventory);
 
           // Use NEW button logic
           const buttonHtml = getAddButtonHtml(p.id);
@@ -2224,11 +2459,11 @@
           card.innerHTML = `
             <div style="position:relative;">${imgHtml}<div class="badges-container">${badgesHtml}</div></div>
             <div style="padding: 0 5px 5px 5px; display:flex; flex-direction:column; flex:1;">
-                <div class="scroll-card-title">${p.id}-${p.name}</div>
+                <div class="scroll-card-title">${getProductDisplayTitle(p)}</div>
                 <div style="display:flex; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
                     <span style="font-size:0.75rem; color:#666; font-weight:600;">${p.brand}</span>
                     ${genderHtml}
-                    <span class="warehouse-tag">${getWarehouseLabel(p)}</span>
+                    ${getProductAvailabilityHtml(p)}
                 </div>
                 <div class="scroll-card-price">
                     ${formatProductPrice(p)} ${stockHtml}
@@ -2400,7 +2635,36 @@
         let filtered = [];
         let title = "";
 
-        if (criteria.startsWith("WarehouseBrand:")) {
+        if (criteria.startsWith("WarehouseOther:")) {
+          const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
+          filtered = db.filter((product) => {
+            const productBrand = String(product.brand || "").toLowerCase();
+            return (
+              normalizeWarehouseCode(product.warehouse) === warehouseCode &&
+              productBrand &&
+              !FEATURED_BRANDS_LOWER.includes(productBrand)
+            );
+          });
+          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · Other Brands`;
+        } else if (criteria.startsWith("WarehouseSale:")) {
+          const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
+          filtered = db
+            .filter(
+              (product) =>
+                normalizeWarehouseCode(product.warehouse) === warehouseCode &&
+                Number(product.sale) > 0,
+            )
+            .sort((a, b) => Number(a.sale) - Number(b.sale));
+          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · On Sale`;
+        } else if (criteria.startsWith("WarehouseSet:")) {
+          const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
+          filtered = db.filter(
+            (product) =>
+              normalizeWarehouseCode(product.warehouse) === warehouseCode &&
+              isGiftSetProduct(product),
+          );
+          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · Gift Sets`;
+        } else if (criteria.startsWith("WarehouseBrand:")) {
           const parts = criteria.split(":");
           const warehouseCode = normalizeWarehouseCode(parts[1]);
           const brand = decodeURIComponent(parts.slice(2).join(":"));
@@ -2418,7 +2682,7 @@
           );
           title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} Products`;
         } else if (criteria === "All") {
-          filtered = db;
+          filtered = groupProductsForDisplay(db, db);
           title = "All Products";
         } else if (criteria === "Sale") {
           // 【核心修改】：点击 See All 进入全屏时也按照数字从小到大排序
@@ -2496,6 +2760,7 @@
             filtered = scoredProducts.map((item) => item.product);
             title = `Results: "${rawTerm}"`;
           }
+          filtered = groupProductsForDisplay(filtered, db);
         } else if (criteria === "Other") {
           filtered = db.filter((p) => {
             const pBrandLower = p.brand ? p.brand.toLowerCase() : "";
@@ -2543,7 +2808,10 @@
           const genderText = p.gender
             ? ` · <span class="gender-tag ${genderClass}">${p.gender}</span>`
             : "";
-          const stockHtml = getStockHtml(p.inventory);
+          const stockHtml =
+            getSelectableWarehouseVariants(p).length > 1
+              ? ""
+              : getStockHtml(p.inventory);
 
           // Use NEW button logic
           const buttonHtml = getAddButtonHtml(p.id);
@@ -2555,8 +2823,8 @@
                   <div class="badges-container">${badgesHtml}</div>
               </div>
               <div class="caption">
-                 <div style="font-size:0.85rem; height:2.4em; overflow:hidden; margin-bottom:5px; line-height:1.2;">${p.id}-${p.name}</div>
-                 <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">${p.brand}${genderText} <span class="warehouse-tag">${getWarehouseLabel(p)}</span><br>${formatSize(p)}</div>
+                 <div style="font-size:0.85rem; height:2.4em; overflow:hidden; margin-bottom:5px; line-height:1.2;">${getProductDisplayTitle(p)}</div>
+                 <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">${p.brand}${genderText} ${getProductAvailabilityHtml(p)}<br>${formatSize(p)}</div>
                  <div class="item-price">${formatProductPrice(p)} ${stockHtml}</div>
                  <div class="btn-qty-wrapper" data-btn-wrap="${p.id}">${buttonHtml}</div>
               </div>
@@ -2629,7 +2897,7 @@
         currentModalProductId = product.id;
         document.getElementById("modal-img").src = getProductImage(product);
         document.getElementById("modal-title").textContent =
-          `${product.id}-${product.name}`;
+          getProductDisplayTitle(product);
         const notesContent = product.Notes || product.notes;
         let notesHtml = "";
         if (notesContent && notesContent.trim() !== "") {
@@ -2637,10 +2905,13 @@
         }
         const genderClass = getGenderClass(product.gender);
         document.getElementById("modal-sub").innerHTML =
-          `<div style="font-size:1.1rem; color:#333; margin-bottom:5px;">${product.brand}</div><div style="margin-bottom:8px; font-size:0.85rem; color:#555; display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap;"><span class="gender-tag ${genderClass}" style="font-size:0.8rem; margin:0;">${product.gender || "Unisex"}</span><span class="warehouse-tag">${getWarehouseLabel(product)}</span><span>${formatSize(product)}</span></div>${notesHtml}`;
+          `<div style="font-size:1.1rem; color:#333; margin-bottom:5px;">${product.brand}</div><div style="margin-bottom:8px; font-size:0.85rem; color:#555; display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap;"><span class="gender-tag ${genderClass}" style="font-size:0.8rem; margin:0;">${product.gender || "Unisex"}</span>${getProductAvailabilityHtml(product)}<span>${formatSize(product)}</span></div>${notesHtml}`;
 
         const stockEl = document.getElementById("modal-stock");
-        const stockVal = getStockHtml(product.inventory);
+        const stockVal =
+          getSelectableWarehouseVariants(product).length > 1
+            ? ""
+            : getStockHtml(product.inventory);
         if (stockVal) {
           stockEl.innerHTML = `<div style="color:#d9534f; font-weight:bold; font-size:0.95rem; border:1px solid #d9534f; display:inline-block; padding:3px 10px; border-radius:4px; background:#fff0f0;">🔥 Fast Moving: Only ${product.inventory} Left!</div>`;
           stockEl.style.display = "block";
@@ -2655,7 +2926,7 @@
       };
 
       window.openModalById = function (id) {
-        const p = window.perfumeDB.find((x) => x.id === id);
+        const p = getRenderableProductById(id);
         if (p) openModal(p);
       };
 
@@ -2739,9 +3010,132 @@
         setTimeout(() => t.classList.remove("show"), 2000);
       }
 
+      function getRecommendedWarehouse(variants) {
+        const availableCodes = new Set(
+          variants.map((variant) => normalizeWarehouseCode(variant.warehouse)),
+        );
+        const cartCounts = {};
+        cartItems.forEach((item) => {
+          const code = normalizeWarehouseCode(item.warehouse);
+          if (!WAREHOUSE_LABELS[code]) return;
+          cartCounts[code] =
+            (cartCounts[code] || 0) + (Number(item.quantity) || 0);
+        });
+
+        const rankedCartWarehouses = Object.entries(cartCounts)
+          .filter(([code]) => availableCodes.has(code))
+          .sort((a, b) => {
+            if (b[1] !== a[1]) return b[1] - a[1];
+            if (a[0] === activeWarehouseCode) return -1;
+            if (b[0] === activeWarehouseCode) return 1;
+            return WAREHOUSE_ORDER.indexOf(a[0]) - WAREHOUSE_ORDER.indexOf(b[0]);
+          });
+
+        if (rankedCartWarehouses.length > 0) {
+          return {
+            code: rankedCartWarehouses[0][0],
+            reason: "Recommended to keep more of your order in the same warehouse.",
+          };
+        }
+        if (availableCodes.has(activeWarehouseCode)) {
+          return {
+            code: activeWarehouseCode,
+            reason: `Recommended from your selected ${WAREHOUSE_LABELS[activeWarehouseCode]}.`,
+          };
+        }
+        return {
+          code: normalizeWarehouseCode(variants[0].warehouse),
+          reason: "This warehouse currently has the item available.",
+        };
+      }
+
+      window.openWarehouseChoiceById = function (id) {
+        const product = getRenderableProductById(id);
+        if (!product) return;
+        const variants = getSelectableWarehouseVariants(product);
+        const purchasableVariants = variants.filter(hasValidPrice);
+        if (purchasableVariants.length === 0) {
+          showToast("Price is pending for this item.");
+          return;
+        }
+        if (purchasableVariants.length === 1) {
+          updateItemQty(purchasableVariants[0].id, 1);
+          return;
+        }
+
+        const recommendation = getRecommendedWarehouse(purchasableVariants);
+        pendingWarehouseProductId = id;
+        recommendedWarehouseCode = recommendation.code;
+        selectedWarehouseCode = recommendation.code;
+
+        document.getElementById("warehouse-choice-title").textContent =
+          product.name || "Select Warehouse";
+        document.getElementById("warehouse-choice-copy").textContent =
+          recommendation.reason;
+        renderWarehouseChoiceOptions();
+        const modal = document.getElementById("warehouse-choice-modal");
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+      };
+
+      function renderWarehouseChoiceOptions() {
+        const product = getRenderableProductById(pendingWarehouseProductId);
+        const options = document.getElementById("warehouse-choice-options");
+        if (!product || !options) return;
+        options.innerHTML = getSelectableWarehouseVariants(product)
+          .filter(hasValidPrice)
+          .map((variant) => {
+            const code = normalizeWarehouseCode(variant.warehouse);
+            const selected = code === selectedWarehouseCode;
+            const recommended = code === recommendedWarehouseCode;
+            return `
+              <button type="button" class="warehouse-choice-option${selected ? " selected" : ""}" aria-pressed="${selected}" onclick="selectWarehouseOption('${code}')">
+                <span class="warehouse-choice-option-main">
+                  <strong>${WAREHOUSE_LABELS[code]}</strong>
+                  <span class="warehouse-choice-sku">SKU ${variant.id}</span>
+                </span>
+                ${recommended ? '<span class="warehouse-recommended">Recommended</span>' : ""}
+              </button>`;
+          })
+          .join("");
+      }
+
+      window.selectWarehouseOption = function (code) {
+        selectedWarehouseCode = normalizeWarehouseCode(code);
+        renderWarehouseChoiceOptions();
+      };
+
+      window.closeWarehouseChoice = function () {
+        const modal = document.getElementById("warehouse-choice-modal");
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+        pendingWarehouseProductId = null;
+        selectedWarehouseCode = null;
+        recommendedWarehouseCode = null;
+      };
+
+      window.confirmWarehouseChoice = function () {
+        const product = getRenderableProductById(pendingWarehouseProductId);
+        const variant = getSelectableWarehouseVariants(product).find(
+          (item) =>
+            normalizeWarehouseCode(item.warehouse) === selectedWarehouseCode &&
+            hasValidPrice(item),
+        );
+        if (!variant) return;
+        closeWarehouseChoice();
+        updateItemQty(variant.id, 1);
+      };
+
+      function refreshProductButtons() {
+        document.querySelectorAll("[data-btn-wrap]").forEach((wrap) => {
+          wrap.innerHTML = getAddButtonHtml(wrap.getAttribute("data-btn-wrap"));
+        });
+        if (currentModalProductId) updateModalButtonState(currentModalProductId);
+      }
+
       window.updateItemQty = function (id, delta) {
         const db = window.perfumeDB;
-        const product = db.find((p) => p.id === id);
+        const product = db.find((p) => String(p.id) === String(id));
         if (!product) return;
         if (!hasValidPrice(product)) {
           showToast("Price is pending for this item.");
@@ -2774,15 +3168,7 @@
 
         saveCart();
         updateWholesaleBanner();
-
-        // 核心修改 2：通过 data-btn-wrap 找到所有对应这个商品ID的容器，统一批量更新！
-        const newBtnHtml = getAddButtonHtml(id);
-        document.querySelectorAll(`[data-btn-wrap="${id}"]`).forEach((wrap) => {
-          wrap.innerHTML = newBtnHtml;
-        });
-
-        // 弹窗内的独立更新逻辑
-        if (currentModalProductId === id) updateModalButtonState(id);
+        refreshProductButtons();
       };
 
       function updateModalButtonState(id) {
@@ -2807,8 +3193,12 @@
         document.querySelectorAll(".modal").forEach((o) =>
           o.addEventListener("click", (e) => {
             if (e.target === o) {
-              o.classList.remove("open");
-              currentModalProductId = null;
+              if (o.id === "warehouse-choice-modal") {
+                closeWarehouseChoice();
+              } else {
+                o.classList.remove("open");
+                if (o.id === "modal") currentModalProductId = null;
+              }
             }
           }),
         );
