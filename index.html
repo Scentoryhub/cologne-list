@@ -214,15 +214,23 @@
         gap: 10px;
       }
       .warehouse-group {
-        border: 1px solid #e5e0d4;
+        border: 1px solid rgba(255, 215, 0, 0.42);
         border-radius: 8px;
-        background: #fcfbf8;
+        background: rgba(255, 255, 255, 0.96);
         overflow: hidden;
+        min-width: 0;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .warehouse-group.expanded {
+        border-color: rgba(255, 215, 0, 0.72);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
       }
       .warehouse-toggle {
         width: 100%;
-        min-height: 50px;
-        padding: 12px 14px;
+        min-height: 54px;
+        padding: 13px 16px;
         border: 0;
         background: transparent;
         color: #222;
@@ -232,7 +240,7 @@
         justify-content: space-between;
         text-align: left;
         font: inherit;
-        font-size: 0.95rem;
+        font-size: 1rem;
         font-weight: 800;
         letter-spacing: 0.4px;
       }
@@ -247,12 +255,14 @@
       }
       .warehouse-brand-list {
         display: none;
-        padding: 0 10px 10px;
+        grid-template-columns: 1fr;
+        gap: 0;
+        padding: 6px 14px 12px;
         border-top: 1px solid #eee8da;
         background: #fff;
       }
       .warehouse-group.expanded .warehouse-brand-list {
-        display: block;
+        display: grid;
       }
       .warehouse-brand-item {
         width: 100%;
@@ -277,6 +287,7 @@
         font-weight: 800;
       }
       .warehouse-empty {
+        grid-column: 1 / -1;
         margin: 10px 4px 2px;
         color: #999;
         font-size: 0.82rem;
@@ -393,30 +404,6 @@
         font-weight: 700;
         line-height: 1.35;
       }
-      .quick-guide-actions {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-      }
-      .quick-guide-action {
-        width: 100%;
-        min-height: 42px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.78rem;
-        font-weight: 800;
-        letter-spacing: 0;
-        line-height: 1.15;
-        color: #fff;
-        border: 1px solid rgba(255, 255, 255, 0.24);
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .quick-guide-action:active,
-      .quick-guide-action.active {
-        background: #ffd700;
-        color: #000;
-        border-color: #ffd700;
-      }
       .quick-guide-hide {
         position: absolute;
         top: 10px;
@@ -427,49 +414,29 @@
         text-decoration: underline;
         text-underline-offset: 3px;
       }
-      .quick-brand-panel {
-        display: none;
+      .quick-warehouse-heading {
         margin-top: 12px;
         padding-top: 10px;
         border-top: 1px solid rgba(255, 215, 0, 0.2);
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
       }
-      .quick-brand-panel.expanded {
-        display: block;
-      }
-      .quick-brand-title {
-        margin: 0 0 8px;
+      .quick-warehouse-heading h2 {
+        margin: 0 0 9px;
         font-size: 0.82rem;
         font-weight: 800;
         color: #f2d166;
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
-      .quick-brand-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      .quick-brand-btn {
-        min-height: 38px;
-        padding: 8px 12px;
-        border-radius: 999px;
-        border: 1px solid rgba(255, 215, 0, 0.38);
-        background: rgba(255, 255, 255, 0.92);
-        color: #111;
-        cursor: pointer;
-        font-size: 0.82rem;
-        font-weight: 800;
-        letter-spacing: 0;
-        white-space: nowrap;
-      }
-      .quick-brand-more {
-        margin-top: 10px;
-        color: #ffd700;
-        cursor: pointer;
-        font-size: 0.8rem;
-        font-weight: 800;
-        text-decoration: underline;
-        text-underline-offset: 3px;
+      .quick-warehouse-heading span {
+        margin-bottom: 9px;
+        color: rgba(255, 255, 255, 0.66);
+        font-size: 0.75rem;
+        line-height: 1.3;
+        text-align: right;
       }
       .menu-guide-link {
         color: var(--accent-color);
@@ -477,21 +444,58 @@
       }
       @media (min-width: 520px) {
         .quick-guide {
-          max-width: 760px;
+          max-width: 1180px;
           margin: 12px auto 14px;
-          padding: 14px 18px;
+          padding: 16px 20px 20px;
         }
         .quick-guide-restore {
-          max-width: 760px;
+          max-width: 1180px;
           margin: 10px auto;
         }
-        .quick-guide-action {
-          font-size: 0.9rem;
+        .warehouse-navigation {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .warehouse-group {
+          display: contents;
+        }
+        .warehouse-group[data-warehouse="TX"] .warehouse-toggle {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .warehouse-group[data-warehouse="NE"] .warehouse-toggle {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .warehouse-toggle {
+          border: 1px solid rgba(255, 215, 0, 0.42);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.96);
+        }
+        .warehouse-group.expanded .warehouse-toggle {
+          border-color: #ffd700;
+          background: #ffd700;
+        }
+        .warehouse-group.expanded .warehouse-toggle::after {
+          color: #111;
+        }
+        .warehouse-brand-list {
+          grid-column: 1 / -1;
+          grid-row: 2;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0 14px;
+          border: 1px solid rgba(255, 215, 0, 0.42);
+          border-radius: 8px;
         }
       }
-      @media (max-width: 340px) {
-        .quick-guide-action {
-          font-size: 0.72rem;
+      @media (max-width: 519px) {
+        .quick-warehouse-heading {
+          display: block;
+        }
+        .quick-warehouse-heading span {
+          display: block;
+          margin-top: -4px;
+          text-align: left;
         }
       }
 
@@ -1310,12 +1314,6 @@
             style="color: #b28900"
             >Other Brands</a
           >
-          <a class="menu-link" onclick="handleMenuClick('BestSellers')"
-            >Best Sellers 🔥</a
-          >
-          <a class="menu-link" onclick="handleMenuClick('New')"
-            >New Arrivals 🆕</a
-          >
           <a class="menu-link" href="cart.html">My Cart</a>
           <a
             class="menu-link"
@@ -1332,23 +1330,6 @@
             >Contact Us</a
           >
         </nav>
-        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee" />
-        <div
-          style="
-            font-weight: 700;
-            margin-bottom: 15px;
-            font-size: 0.85rem;
-            color: #999;
-            letter-spacing: 1px;
-          "
-        >
-          SHOP BY WAREHOUSE
-        </div>
-        <div
-          class="warehouse-navigation"
-          id="warehouse-menu-container"
-          aria-label="Warehouses and brands"
-        ></div>
         <div style="height: 50px"></div>
       </div>
     </div>
@@ -1377,46 +1358,15 @@
             ships for $10; orders of 2+ items ship free.
           </p>
         </div>
-        <div class="quick-guide-actions">
-          <button
-            type="button"
-            class="quick-guide-action"
-            onclick="scrollToBestSellers()"
-          >
-            Best Sellers
-          </button>
-          <button
-            type="button"
-            class="quick-guide-action"
-            onclick="scrollToNewArrivals()"
-          >
-            New Arrivals
-          </button>
-          <button
-            type="button"
-            id="quick-brands-toggle"
-            class="quick-guide-action"
-            onclick="toggleQuickBrands()"
-          >
-            Popular Brands
-          </button>
+        <div class="quick-warehouse-heading">
+          <h2>Shop by Warehouse</h2>
+          <span>Select a warehouse to browse its brands</span>
         </div>
         <div
-          id="quick-brand-panel"
-          class="quick-brand-panel"
-          aria-label="Popular Brands"
-        >
-          <h2 class="quick-brand-title">Popular Brands</h2>
-          <div id="quick-brand-grid" class="quick-brand-grid"></div>
-          <button
-            type="button"
-            id="quick-brand-more"
-            class="quick-brand-more"
-            onclick="toggleQuickBrandLimit()"
-          >
-            Show More Brands
-          </button>
-        </div>
+          class="warehouse-navigation"
+          id="warehouse-menu-container"
+          aria-label="Warehouses and brands"
+        ></div>
       </section>
 
       <div id="quick-guide-restore" class="quick-guide-restore">
@@ -1826,13 +1776,6 @@
         "Burberry",
         "Versace",
       ];
-      const QUICK_SEARCH_BRANDS = [
-        "Prada",
-        "Byredo",
-        "Dolce and Gabbana",
-        "Amouage",
-        "Ralph Lauren",
-      ];
       const FEATURED_BRANDS_LOWER = FEATURED_BRANDS.map((b) => b.toLowerCase());
       const discountTiers = [
         { min: 1, max: 1, percent: 0 },
@@ -1863,15 +1806,12 @@
       let currentGridData = [];
       let viewMode = "home";
       let currentModalProductId = null;
-      let quickBrandsExpanded = true;
-      let quickBrandsShowAll = false;
 
       document.addEventListener("DOMContentLoaded", () => {
         loadCart();
         setupMenu();
         setupQuickGuide();
         setupBackToTop();
-        renderWarehouseMenu();
         setupModalBackdropClosing();
         setupSearch();
 
@@ -2139,18 +2079,38 @@
         const container = document.getElementById("warehouse-menu-container");
         if (!container) return;
 
+        const products = (window.perfumeDB || []).filter(isProductAvailable);
+        if (products.length === 0) {
+          container.innerHTML =
+            '<p class="warehouse-empty">Loading warehouse brands...</p>';
+          container.removeAttribute("data-ready");
+          return;
+        }
+
         const expandedCodes = new Set(
           Array.from(container.querySelectorAll(".warehouse-group.expanded"))
             .map((group) => group.dataset.warehouse),
         );
-        const products = (window.perfumeDB || []).filter(isProductAvailable);
+        const initialExpandedCode =
+          container.dataset.ready === "true" ||
+          !window.matchMedia("(min-width: 520px)").matches
+            ? ""
+            : WAREHOUSE_ORDER.find((code) =>
+                products.some(
+                  (product) =>
+                    normalizeWarehouseCode(product.warehouse) === code,
+                ),
+              ) || "";
         container.innerHTML = "";
 
         WAREHOUSE_ORDER.forEach((code) => {
           const brands = Array.from(
             new Set(
               products
-                .filter((product) => normalizeWarehouseCode(product.warehouse) === code)
+                .filter(
+                  (product) =>
+                    normalizeWarehouseCode(product.warehouse) === code,
+                )
                 .map((product) => String(product.brand || "").trim())
                 .filter(Boolean),
             ),
@@ -2159,15 +2119,27 @@
           const group = document.createElement("section");
           group.className = "warehouse-group";
           group.dataset.warehouse = code;
-          if (expandedCodes.has(code)) group.classList.add("expanded");
+          if (expandedCodes.has(code) || code === initialExpandedCode) {
+            group.classList.add("expanded");
+          }
 
           const toggle = document.createElement("button");
           toggle.type = "button";
           toggle.className = "warehouse-toggle";
           toggle.textContent = WAREHOUSE_LABELS[code];
-          toggle.setAttribute("aria-expanded", String(group.classList.contains("expanded")));
+          toggle.setAttribute(
+            "aria-expanded",
+            String(group.classList.contains("expanded")),
+          );
           toggle.onclick = () => {
-            const expanded = group.classList.toggle("expanded");
+            const shouldExpand = !group.classList.contains("expanded");
+            container.querySelectorAll(".warehouse-group").forEach((item) => {
+              item.classList.remove("expanded");
+              const itemToggle = item.querySelector(".warehouse-toggle");
+              if (itemToggle) itemToggle.setAttribute("aria-expanded", "false");
+            });
+            group.classList.toggle("expanded", shouldExpand);
+            const expanded = group.classList.contains("expanded");
             toggle.setAttribute("aria-expanded", String(expanded));
           };
           group.appendChild(toggle);
@@ -2188,7 +2160,9 @@
               button.className = "warehouse-brand-item";
               button.textContent = brand;
               button.onclick = () =>
-                switchToGrid(`WarehouseBrand:${code}:${encodeURIComponent(brand)}`);
+                switchToGrid(
+                  `WarehouseBrand:${code}:${encodeURIComponent(brand)}`,
+                );
               brandList.appendChild(button);
             });
           } else {
@@ -2201,6 +2175,7 @@
           group.appendChild(brandList);
           container.appendChild(group);
         });
+        container.dataset.ready = "true";
       }
 
       function getQuickGuideHidden() {
@@ -2220,21 +2195,6 @@
         }
       }
 
-      function getQuickBrandLabel(brand) {
-        const labelMap = {
-          "Yves Saint Laurent": "YSL",
-          "Louis Vuitton": "LV",
-          "Maison Francis Kurkdjian": "MFK",
-          "Parfums de Marly": "PDM",
-          "Jean Paul Gaultier": "JPG",
-          "Bond No. 9": "BOND NO. 9",
-          "Dolce and Gabbana": "D&G",
-          "Gift Sets": "GIFT SETS",
-          "Other Brands": "OTHER BRANDS",
-        };
-        return labelMap[brand] || brand.toUpperCase();
-      }
-
       function setQuickGuideVisibility() {
         const guide = document.getElementById("mobile-quick-guide");
         const restore = document.getElementById("quick-guide-restore");
@@ -2244,68 +2204,8 @@
       }
 
       function setupQuickGuide() {
-        quickBrandsExpanded = true;
-        quickBrandsShowAll = false;
-        renderQuickGuideBrands();
-        updateQuickBrandPanel();
         setQuickGuideVisibility();
-      }
-
-      function renderQuickGuideBrands() {
-        const grid = document.getElementById("quick-brand-grid");
-        const moreBtn = document.getElementById("quick-brand-more");
-        if (!grid || !moreBtn) return;
-
-        grid.innerHTML = "";
-        const featuredQuickItems = FEATURED_BRANDS.map((brand) => ({
-          brand,
-          mode: "scroll",
-          searchTerm: brand,
-        }));
-        const searchQuickItems = QUICK_SEARCH_BRANDS.map((brand) => ({
-          brand,
-          mode: "search",
-          searchTerm: brand,
-        }));
-        const specialQuickItems = [
-          { brand: "Gift Sets", mode: "scroll", target: "Set" },
-          { brand: "Other Brands", mode: "scroll", target: "Other" },
-        ];
-        const quickBrandItems = [
-          ...featuredQuickItems,
-          ...searchQuickItems,
-          ...specialQuickItems,
-        ];
-        const visibleBrands = quickBrandsShowAll
-          ? quickBrandItems
-          : quickBrandItems.slice(0, 10);
-
-        visibleBrands.forEach((item) => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "quick-brand-btn";
-          btn.textContent = getQuickBrandLabel(item.brand);
-          btn.onclick = () => {
-            if (item.mode === "search")
-              switchToGrid("Search:" + item.searchTerm);
-            else window.scrollToBrand(item.target || item.brand);
-          };
-          grid.appendChild(btn);
-        });
-
-        moreBtn.style.display =
-          quickBrandItems.length > 10 ? "inline-block" : "none";
-        moreBtn.textContent = quickBrandsShowAll
-          ? "Show Less"
-          : "Show More Brands";
-      }
-
-      function updateQuickBrandPanel() {
-        const panel = document.getElementById("quick-brand-panel");
-        const toggle = document.getElementById("quick-brands-toggle");
-        if (!panel || !toggle) return;
-        panel.classList.toggle("expanded", quickBrandsExpanded);
-        toggle.classList.toggle("active", quickBrandsExpanded);
+        renderWarehouseMenu();
       }
 
       function ensureHomeView() {
@@ -2315,42 +2215,6 @@
           document.getElementById("grid-view").style.display = "none";
         }
       }
-
-      function scrollToHomeSection(sectionId, attempt = 0) {
-        ensureHomeView();
-        const section = document.getElementById(sectionId);
-        if (section) {
-          section.scrollIntoView({ behavior: "smooth", block: "start" });
-          return;
-        }
-        if (attempt < 12) {
-          setTimeout(() => scrollToHomeSection(sectionId, attempt + 1), 100);
-        }
-      }
-
-      window.scrollToBestSellers = function () {
-        scrollToHomeSection("best-sellers-section");
-      };
-
-      window.scrollToNewArrivals = function () {
-        scrollToHomeSection("new-arrivals-section");
-      };
-
-      window.toggleQuickBrands = function () {
-        quickBrandsExpanded = !quickBrandsExpanded;
-        if (quickBrandsExpanded) {
-          quickBrandsShowAll = false;
-          renderQuickGuideBrands();
-        }
-        updateQuickBrandPanel();
-      };
-
-      window.toggleQuickBrandLimit = function () {
-        quickBrandsShowAll = !quickBrandsShowAll;
-        quickBrandsExpanded = true;
-        renderQuickGuideBrands();
-        updateQuickBrandPanel();
-      };
 
       window.hideQuickGuide = function () {
         setQuickGuideHidden(true);
@@ -2365,10 +2229,7 @@
         setQuickGuideHidden(false);
         setQuickGuideVisibility();
         ensureHomeView();
-        quickBrandsExpanded = true;
-        quickBrandsShowAll = false;
-        renderQuickGuideBrands();
-        updateQuickBrandPanel();
+        renderWarehouseMenu();
         document.getElementById("sidebar").classList.remove("active");
         document.getElementById("sidebar-overlay").classList.remove("active");
         const guide = document.getElementById("mobile-quick-guide");
@@ -2439,29 +2300,11 @@
 
         const renderSection = (title, items, filterKey) => {
           const section = createBrandSection(title, items, filterKey);
-          if (filterKey === "BestSellers") {
-            section.id = "best-sellers-section";
-          } else if (filterKey === "New") {
-            section.id = "new-arrivals-section";
-          } else if (filterKey && !["Sale"].includes(filterKey)) {
+          if (filterKey && !["Sale"].includes(filterKey)) {
             section.id = "brand-" + filterKey.replace(/\s+/g, "");
           }
           container.appendChild(section);
         };
-
-        // 【核心修改】：加入基于数字从小到大的精准排序能力
-        const bestSellers = db
-          .filter((p) => Number(p.top) > 0)
-          .sort((a, b) => Number(a.top) - Number(b.top));
-        if (bestSellers.length > 0)
-          renderSection("🔥 Best Sellers", bestSellers, "BestSellers");
-
-        // 【核心修改】：加入基于数字从小到大的精准排序能力
-        const newArrivals = db
-          .filter((p) => Number(p.new) > 0)
-          .sort((a, b) => Number(a.new) - Number(b.new));
-        if (newArrivals.length > 0)
-          renderSection("🆕 New Arrivals", newArrivals, "New");
 
         const renderedBrands = new Set();
         FEATURED_BRANDS.forEach((brand) => {
@@ -2525,8 +2368,7 @@
       function createBrandSection(title, products, filterKey) {
         const section = document.createElement("div");
         section.className = "brand-section";
-        const cleanFilterKey =
-          filterKey || (title.includes("Best") ? "BestSellers" : "All");
+        const cleanFilterKey = filterKey || "All";
 
         const header = document.createElement("div");
         header.className = "brand-header";
@@ -2774,18 +2616,6 @@
         } else if (criteria === "All") {
           filtered = db;
           title = "All Products";
-        } else if (criteria === "BestSellers") {
-          // 【核心修改】：点击 See All 进入全屏时也按照数字从小到大排序
-          filtered = db
-            .filter((p) => Number(p.top) > 0)
-            .sort((a, b) => Number(a.top) - Number(b.top));
-          title = "Best Sellers";
-        } else if (criteria === "New") {
-          // 【核心修改】：点击 See All 进入全屏时也按照数字从小到大排序
-          filtered = db
-            .filter((p) => Number(p.new) > 0)
-            .sort((a, b) => Number(a.new) - Number(b.new));
-          title = "New Arrivals";
         } else if (criteria === "Sale") {
           // 【核心修改】：点击 See All 进入全屏时也按照数字从小到大排序
           filtered = db
