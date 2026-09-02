@@ -191,35 +191,35 @@
         text-transform: uppercase;
       }
       .warehouse-navigation {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
       }
       .warehouse-group {
+        display: contents;
+      }
+      .warehouse-group[data-warehouse="TX"] .warehouse-toggle {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .warehouse-group[data-warehouse="NE"] .warehouse-toggle {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .warehouse-toggle {
+        position: relative;
+        width: 100%;
+        min-height: 66px;
+        padding: 11px 36px 11px 12px;
         border: 1px solid rgba(255, 215, 0, 0.42);
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.96);
-        overflow: hidden;
-        min-width: 0;
-        transition:
-          border-color 0.2s ease,
-          box-shadow 0.2s ease;
-      }
-      .warehouse-group.expanded {
-        border-color: rgba(255, 215, 0, 0.72);
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
-      }
-      .warehouse-toggle {
-        width: 100%;
-        min-height: 54px;
-        padding: 13px 16px;
-        border: 0;
-        background: transparent;
         color: #222;
         cursor: pointer;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
         text-align: left;
         font: inherit;
         font-size: 1rem;
@@ -230,7 +230,7 @@
         flex: 1;
       }
       .warehouse-count {
-        margin-right: 10px;
+        margin-top: 3px;
         color: #777;
         font-size: 0.75rem;
         font-weight: 700;
@@ -238,19 +238,34 @@
       }
       .warehouse-toggle::after {
         content: "+";
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        transform: translateY(-50%);
         color: var(--accent-color);
         font-size: 1.3rem;
         font-weight: 400;
       }
       .warehouse-group.expanded .warehouse-toggle::after {
         content: "−";
+        color: #111;
+      }
+      .warehouse-group.expanded .warehouse-toggle {
+        border-color: #ffd700;
+        background: #ffd700;
+      }
+      .warehouse-group.expanded .warehouse-count {
+        color: #554500;
       }
       .warehouse-brand-list {
         display: none;
-        grid-template-columns: 1fr;
-        gap: 0;
-        padding: 6px 14px 12px;
-        border-top: 1px solid #eee8da;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid rgba(255, 215, 0, 0.42);
+        border-radius: 8px;
         background: #fff;
       }
       .warehouse-group.expanded .warehouse-brand-list {
@@ -258,15 +273,17 @@
       }
       .warehouse-brand-item {
         width: 100%;
-        padding: 11px 7px;
-        border: 0;
-        border-bottom: 1px solid #f0f0f0;
-        background: transparent;
+        min-height: 44px;
+        padding: 9px 11px;
+        border: 1px solid #ece7dc;
+        border-radius: 6px;
+        background: #fbfaf7;
         color: #555;
         cursor: pointer;
         text-align: left;
         font: inherit;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
+        line-height: 1.2;
       }
       .warehouse-brand-item:hover,
       .warehouse-brand-item:focus-visible {
@@ -275,6 +292,9 @@
         font-weight: 700;
       }
       .warehouse-brand-item.all-products {
+        grid-column: 1 / -1;
+        background: #fff8db;
+        border-color: #ead58b;
         color: var(--accent-color);
         font-weight: 800;
       }
@@ -287,6 +307,7 @@
       }
       .warehouse-brand-more {
         display: none;
+        grid-column: 1 / -1;
         width: 100%;
         min-height: 44px;
         margin-top: 4px;
@@ -295,7 +316,7 @@
         font: inherit;
         font-size: 0.85rem;
         font-weight: 800;
-        text-align: left;
+        text-align: center;
       }
 
       /* ================= Wholesale Banner (Top Sticky) ================= */
@@ -415,40 +436,22 @@
           margin: 12px auto 14px;
           padding: 16px 20px 20px;
         }
-        .warehouse-navigation {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-        .warehouse-group {
-          display: contents;
-        }
-        .warehouse-group[data-warehouse="TX"] .warehouse-toggle {
-          grid-column: 1;
-          grid-row: 1;
-        }
-        .warehouse-group[data-warehouse="NE"] .warehouse-toggle {
-          grid-column: 2;
-          grid-row: 1;
-        }
         .warehouse-toggle {
-          border: 1px solid rgba(255, 215, 0, 0.42);
-          border-radius: 8px;
-          background: rgba(255, 255, 255, 0.96);
+          min-height: 54px;
+          padding: 13px 16px;
+          flex-direction: row;
+          align-items: center;
         }
-        .warehouse-group.expanded .warehouse-toggle {
-          border-color: #ffd700;
-          background: #ffd700;
+        .warehouse-count {
+          margin-top: 0;
+          margin-right: 10px;
         }
-        .warehouse-group.expanded .warehouse-toggle::after {
-          color: #111;
+        .warehouse-toggle::after {
+          position: static;
+          transform: none;
         }
         .warehouse-brand-list {
-          grid-column: 1 / -1;
-          grid-row: 2;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0 14px;
-          border: 1px solid rgba(255, 215, 0, 0.42);
-          border-radius: 8px;
         }
       }
       @media (max-width: 519px) {
@@ -486,6 +489,9 @@
         .warehouse-brand-list.show-all-brands
           .warehouse-brand-item.mobile-extra-brand {
           display: block;
+        }
+        .warehouse-brand-item.mobile-last-brand {
+          grid-column: 1 / -1;
         }
         .warehouse-brand-more {
           display: block;
@@ -1365,7 +1371,7 @@
         </div>
         <div class="quick-warehouse-heading">
           <h2>Shop by Warehouse</h2>
-          <span>Select a warehouse to browse its brands</span>
+          <span>Select a warehouse, then choose a brand</span>
         </div>
         <div
           class="warehouse-navigation"
@@ -1621,7 +1627,7 @@
         { min: 101, max: Infinity, percent: 0.35 },
       ];
       const WAREHOUSE_ORDER = ["TX", "NE"];
-      const MOBILE_BRAND_LIMIT = 9;
+      const MOBILE_BRAND_LIMIT = 10;
       const WAREHOUSE_LABELS = {
         TX: "TX Warehouse",
         NE: "NE Warehouse",
@@ -1933,16 +1939,14 @@
           Array.from(container.querySelectorAll(".warehouse-group.expanded"))
             .map((group) => group.dataset.warehouse),
         );
-        const initialExpandedCode =
-          container.dataset.ready === "true" ||
-          !window.matchMedia("(min-width: 520px)").matches
-            ? ""
-            : WAREHOUSE_ORDER.find((code) =>
-                products.some(
-                  (product) =>
-                    normalizeWarehouseCode(product.warehouse) === code,
-                ),
-              ) || "";
+        const activeWarehouseCode =
+          WAREHOUSE_ORDER.find((code) => expandedCodes.has(code)) ||
+          WAREHOUSE_ORDER.find((code) =>
+            products.some(
+              (product) => normalizeWarehouseCode(product.warehouse) === code,
+            ),
+          ) ||
+          WAREHOUSE_ORDER[0];
         container.innerHTML = "";
 
         WAREHOUSE_ORDER.forEach((code) => {
@@ -1960,7 +1964,7 @@
           const group = document.createElement("section");
           group.className = "warehouse-group";
           group.dataset.warehouse = code;
-          if (expandedCodes.has(code) || code === initialExpandedCode) {
+          if (code === activeWarehouseCode) {
             group.classList.add("expanded");
           }
 
@@ -1977,15 +1981,13 @@
             String(group.classList.contains("expanded")),
           );
           toggle.onclick = () => {
-            const shouldExpand = !group.classList.contains("expanded");
             container.querySelectorAll(".warehouse-group").forEach((item) => {
               item.classList.remove("expanded");
               const itemToggle = item.querySelector(".warehouse-toggle");
               if (itemToggle) itemToggle.setAttribute("aria-expanded", "false");
             });
-            group.classList.toggle("expanded", shouldExpand);
-            const expanded = group.classList.contains("expanded");
-            toggle.setAttribute("aria-expanded", String(expanded));
+            group.classList.add("expanded");
+            toggle.setAttribute("aria-expanded", "true");
           };
           group.appendChild(toggle);
 
@@ -2002,7 +2004,11 @@
             brands.forEach((brand, index) => {
               const button = document.createElement("button");
               button.type = "button";
-              button.className = `warehouse-brand-item${index >= MOBILE_BRAND_LIMIT ? " mobile-extra-brand" : ""}`;
+              const isLastOddBrand =
+                brands.length <= MOBILE_BRAND_LIMIT &&
+                brands.length % 2 === 1 &&
+                index === brands.length - 1;
+              button.className = `warehouse-brand-item${index >= MOBILE_BRAND_LIMIT ? " mobile-extra-brand" : ""}${isLastOddBrand ? " mobile-last-brand" : ""}`;
               button.textContent = brand;
               button.onclick = () =>
                 switchToGrid(
