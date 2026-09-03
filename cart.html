@@ -615,20 +615,10 @@
           .trim();
       }
 
-      function normalizeWarehouseLabel(value, explicitLabel) {
-        const savedLabel = String(explicitLabel || "").trim();
-        if (savedLabel) return savedLabel;
+      function normalizeWarehouseLabel(value) {
         const code = normalizeWarehouseCode(value);
         if (!code) return "";
-        const matchingProduct = (window.perfumeDB || []).find(
-          (product) => normalizeWarehouseCode(product.warehouse) === code,
-        );
-        const sourceLabel = String(
-          (matchingProduct && matchingProduct.warehouse_name) || "",
-        ).trim();
-        if (sourceLabel) return sourceLabel;
-        const rawValue = String(value || "").trim();
-        return /warehouse$/i.test(rawValue) ? rawValue : `${code} Warehouse`;
+        return `${code} Warehouse`;
       }
 
       const tiers = [
@@ -675,10 +665,7 @@
           const price = Number(item.price) || 0;
           const subtotal = (price * item.quantity).toFixed(2);
           const displayTitle = item.caption;
-          const warehouseLabel = normalizeWarehouseLabel(
-            item.warehouse,
-            item.warehouse_name,
-          );
+          const warehouseLabel = normalizeWarehouseLabel(item.warehouse);
 
           const li = document.createElement("li");
           li.className = "cart-item";
@@ -840,10 +827,7 @@
 
         cart.forEach((item) => {
           // 这里不需要手动处理 &，因为最后会统一 encode
-          const warehouse = normalizeWarehouseLabel(
-            item.warehouse,
-            item.warehouse_name,
-          );
+          const warehouse = normalizeWarehouseLabel(item.warehouse);
           msg += `${item.caption}${warehouse ? ` [${warehouse}]` : ""} x *${item.quantity}*\n\n`;
         });
 

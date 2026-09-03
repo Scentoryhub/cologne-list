@@ -1799,25 +1799,17 @@
         products.forEach((product, index) => {
           const code = normalizeWarehouseCode(product.warehouse);
           if (!code) return;
-          const orderValue = Number(product.warehouse_order);
-          const order = Number.isFinite(orderValue) ? orderValue : Infinity;
-          const sourceLabel = String(product.warehouse_name || "").trim();
-          const rawWarehouse = String(product.warehouse || "").trim();
-          const label =
-            sourceLabel ||
-            (/warehouse$/i.test(rawWarehouse) ? rawWarehouse : `${code} Warehouse`);
-          const existing = warehouses.get(code);
-          if (!existing) {
-            warehouses.set(code, { code, label, order, firstSeen: index });
-          } else {
-            if (sourceLabel) existing.label = sourceLabel;
-            existing.order = Math.min(existing.order, order);
+          if (!warehouses.has(code)) {
+            warehouses.set(code, {
+              code,
+              label: `${code} Warehouse`,
+              firstSeen: index,
+            });
           }
         });
         warehouseCatalogSource = products;
         warehouseCatalogLength = products.length;
         warehouseCatalogCache = Array.from(warehouses.values()).sort((a, b) => {
-          if (a.order !== b.order) return a.order - b.order;
           if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen;
           return a.code.localeCompare(b.code);
         });
@@ -1884,10 +1876,7 @@
 
       function getWarehouseLabel(product) {
         const code = normalizeWarehouseCode(product && product.warehouse);
-        return (
-          String((product && product.warehouse_name) || "").trim() ||
-          getWarehouseLabelByCode(code)
-        );
+        return getWarehouseLabelByCode(code);
       }
 
       function getProductVariants(product) {
@@ -2168,7 +2157,7 @@
 
         cartItems.forEach((item) => {
           const warehouse = item.warehouse
-            ? ` [${String(item.warehouse_name || "").trim() || getWarehouseLabelByCode(item.warehouse)}]`
+            ? ` [${getWarehouseLabelByCode(item.warehouse)}]`
             : "";
           msg += `${item.caption}${warehouse} x *${item.quantity}*\n\n`;
         });
@@ -3245,7 +3234,6 @@
             brand: product.brand,
             ml: product.ml,
             warehouse: product.warehouse,
-            warehouse_name: getWarehouseLabel(product),
             quantity: 1,
           });
           showToast("Added to Cart! 🛒");
