@@ -192,19 +192,12 @@
       }
       .warehouse-navigation {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
       }
-      .warehouse-group {
-        display: contents;
-      }
-      .warehouse-group[data-warehouse="TX"] .warehouse-toggle {
-        grid-column: 1;
-        grid-row: 1;
-      }
-      .warehouse-group[data-warehouse="NE"] .warehouse-toggle {
-        grid-column: 2;
-        grid-row: 1;
+      .warehouse-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
       }
       .warehouse-toggle {
         position: relative;
@@ -246,30 +239,25 @@
         font-size: 1.3rem;
         font-weight: 400;
       }
-      .warehouse-group.expanded .warehouse-toggle::after {
+      .warehouse-toggle.active::after {
         content: "−";
         color: #111;
       }
-      .warehouse-group.expanded .warehouse-toggle {
+      .warehouse-toggle.active {
         border-color: #ffd700;
         background: #ffd700;
       }
-      .warehouse-group.expanded .warehouse-count {
+      .warehouse-toggle.active .warehouse-count {
         color: #554500;
       }
       .warehouse-brand-list {
-        display: none;
-        grid-column: 1 / -1;
-        grid-row: 2;
+        display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
         padding: 12px;
         border: 1px solid rgba(255, 215, 0, 0.42);
         border-radius: 8px;
         background: #fff;
-      }
-      .warehouse-group.expanded .warehouse-brand-list {
-        display: grid;
       }
       .warehouse-brand-item {
         width: 100%;
@@ -441,6 +429,9 @@
           padding: 13px 16px;
           flex-direction: row;
           align-items: center;
+        }
+        .warehouse-tabs {
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         }
         .warehouse-count {
           margin-top: 0;
@@ -1741,12 +1732,7 @@
         { min: 80, max: 100, percent: 0.32 },
         { min: 101, max: Infinity, percent: 0.35 },
       ];
-      const WAREHOUSE_ORDER = ["TX", "NE"];
       const MOBILE_BRAND_LIMIT = 10;
-      const WAREHOUSE_LABELS = {
-        TX: "TX Warehouse",
-        NE: "NE Warehouse",
-      };
       const DEFAULT_PRODUCT_IMAGE =
         "data:image/svg+xml;charset=UTF-8," +
         encodeURIComponent(
@@ -1759,10 +1745,13 @@
       let currentGridData = [];
       let viewMode = "home";
       let currentModalProductRef = null;
-      let activeWarehouseCode = "TX";
+      let activeWarehouseCode = "";
       let pendingWarehouseProductRef = null;
       let selectedWarehouseCode = null;
       let recommendedWarehouseCode = null;
+      let warehouseCatalogSource = null;
+      let warehouseCatalogLength = -1;
+      let warehouseCatalogCache = [];
 
       document.addEventListener("DOMContentLoaded", () => {
         loadCart();
@@ -1791,16 +1780,68 @@
       }
 
       function normalizeWarehouseCode(value) {
-        const normalized = String(value || "")
+        return String(value || "")
           .trim()
-          .toUpperCase();
-        if (normalized === "TX" || normalized.includes("TX WAREHOUSE")) {
-          return "TX";
+          .toUpperCase()
+          .replace(/\s+WAREHOUSE$/, "")
+          .trim();
+      }
+
+      function getWarehouseCatalog() {
+        const products = window.perfumeDB || [];
+        if (
+          warehouseCatalogSource === products &&
+          warehouseCatalogLength === products.length
+        ) {
+          return warehouseCatalogCache;
         }
-        if (normalized === "NE" || normalized.includes("NE WAREHOUSE")) {
-          return "NE";
+        const warehouses = new Map();
+        products.forEach((product, index) => {
+          const code = normalizeWarehouseCode(product.warehouse);
+          if (!code) return;
+          const orderValue = Number(product.warehouse_order);
+          const order = Number.isFinite(orderValue) ? orderValue : Infinity;
+          const sourceLabel = String(product.warehouse_name || "").trim();
+          const rawWarehouse = String(product.warehouse || "").trim();
+          const label =
+            sourceLabel ||
+            (/warehouse$/i.test(rawWarehouse) ? rawWarehouse : `${code} Warehouse`);
+          const existing = warehouses.get(code);
+          if (!existing) {
+            warehouses.set(code, { code, label, order, firstSeen: index });
+          } else {
+            if (sourceLabel) existing.label = sourceLabel;
+            existing.order = Math.min(existing.order, order);
+          }
+        });
+        warehouseCatalogSource = products;
+        warehouseCatalogLength = products.length;
+        warehouseCatalogCache = Array.from(warehouses.values()).sort((a, b) => {
+          if (a.order !== b.order) return a.order - b.order;
+          if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen;
+          return a.code.localeCompare(b.code);
+        });
+        return warehouseCatalogCache;
+      }
+
+      function getWarehouseLabelByCode(value) {
+        const code = normalizeWarehouseCode(value);
+        const warehouse = getWarehouseCatalog().find((item) => item.code === code);
+        return warehouse ? warehouse.label : code ? `${code} Warehouse` : "";
+      }
+
+      function getWarehouseSortIndex(value) {
+        const code = normalizeWarehouseCode(value);
+        const index = getWarehouseCatalog().findIndex((item) => item.code === code);
+        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+      }
+
+      function ensureActiveWarehouse() {
+        const warehouseCodes = getWarehouseCatalog().map((item) => item.code);
+        if (!warehouseCodes.includes(activeWarehouseCode)) {
+          activeWarehouseCode = warehouseCodes[0] || "";
         }
-        return normalized;
+        return activeWarehouseCode;
       }
 
       function normalizeSku(value) {
@@ -1843,7 +1884,10 @@
 
       function getWarehouseLabel(product) {
         const code = normalizeWarehouseCode(product && product.warehouse);
-        return WAREHOUSE_LABELS[code] || (product && product.warehouse) || "";
+        return (
+          String((product && product.warehouse_name) || "").trim() ||
+          getWarehouseLabelByCode(code)
+        );
       }
 
       function getProductVariants(product) {
@@ -1859,14 +1903,16 @@
           .filter(isProductAvailable)
           .forEach((variant) => {
             const code = normalizeWarehouseCode(variant.warehouse);
-            if (!WAREHOUSE_LABELS[code]) return;
+            if (!code) return;
             const existing = bestByWarehouse.get(code);
             if (!existing || (!hasValidPrice(existing) && hasValidPrice(variant))) {
               bestByWarehouse.set(code, variant);
             }
           });
-        return WAREHOUSE_ORDER.map((code) => bestByWarehouse.get(code)).filter(
-          Boolean,
+        return Array.from(bestByWarehouse.values()).sort(
+          (a, b) =>
+            getWarehouseSortIndex(a.warehouse) -
+            getWarehouseSortIndex(b.warehouse),
         );
       }
 
@@ -1877,7 +1923,7 @@
         if (codes.length > 1) {
           return `<span class="warehouse-tag multi-warehouse">Available in ${codes.join(" & ")}</span>`;
         }
-        return `<span class="warehouse-tag">${codes.length ? WAREHOUSE_LABELS[codes[0]] : getWarehouseLabel(product)}</span>`;
+        return `<span class="warehouse-tag">${codes.length ? getWarehouseLabelByCode(codes[0]) : getWarehouseLabel(product)}</span>`;
       }
 
       function getProductDisplayTitle(product) {
@@ -2122,7 +2168,7 @@
 
         cartItems.forEach((item) => {
           const warehouse = item.warehouse
-            ? ` [${WAREHOUSE_LABELS[normalizeWarehouseCode(item.warehouse)] || item.warehouse}]`
+            ? ` [${String(item.warehouse_name || "").trim() || getWarehouseLabelByCode(item.warehouse)}]`
             : "";
           msg += `${item.caption}${warehouse} x *${item.quantity}*\n\n`;
         });
@@ -2172,18 +2218,46 @@
           return;
         }
 
-        const availableWarehouseCodes = WAREHOUSE_ORDER.filter((code) =>
+        const warehouseCatalog = getWarehouseCatalog().filter((warehouse) =>
           products.some(
-            (product) => normalizeWarehouseCode(product.warehouse) === code,
+            (product) =>
+              normalizeWarehouseCode(product.warehouse) === warehouse.code,
           ),
         );
-        if (!availableWarehouseCodes.includes(activeWarehouseCode)) {
-          activeWarehouseCode =
-            availableWarehouseCodes[0] || WAREHOUSE_ORDER[0];
-        }
+        ensureActiveWarehouse();
         container.innerHTML = "";
 
-        WAREHOUSE_ORDER.forEach((code) => {
+        const tabs = document.createElement("div");
+        tabs.className = "warehouse-tabs";
+
+        warehouseCatalog.forEach(({ code, label }) => {
+          const warehouseProducts = products.filter(
+            (product) => normalizeWarehouseCode(product.warehouse) === code,
+          );
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = `warehouse-toggle${code === activeWarehouseCode ? " active" : ""}`;
+          toggle.innerHTML = `<span class="warehouse-toggle-label">${label}</span><span class="warehouse-count">${warehouseProducts.length} items</span>`;
+          toggle.setAttribute(
+            "aria-label",
+            `${label}, ${warehouseProducts.length} products`,
+          );
+          toggle.setAttribute("aria-pressed", String(code === activeWarehouseCode));
+          toggle.onclick = () => {
+            if (activeWarehouseCode === code) return;
+            activeWarehouseCode = code;
+            if (viewMode === "home") renderHome();
+            else renderWarehouseMenu();
+          };
+          tabs.appendChild(toggle);
+        });
+        container.appendChild(tabs);
+
+        const activeWarehouse = warehouseCatalog.find(
+          (warehouse) => warehouse.code === activeWarehouseCode,
+        );
+        if (activeWarehouse) {
+          const code = activeWarehouse.code;
           const warehouseProducts = products.filter(
             (product) => normalizeWarehouseCode(product.warehouse) === code,
           );
@@ -2194,43 +2268,17 @@
                 .filter(Boolean),
             ),
           ).sort((a, b) => a.localeCompare(b));
-
-          const group = document.createElement("section");
-          group.className = "warehouse-group";
-          group.dataset.warehouse = code;
-          if (code === activeWarehouseCode) {
-            group.classList.add("expanded");
-          }
-
-          const toggle = document.createElement("button");
-          toggle.type = "button";
-          toggle.className = "warehouse-toggle";
-          toggle.innerHTML = `<span class="warehouse-toggle-label">${WAREHOUSE_LABELS[code]}</span><span class="warehouse-count">${warehouseProducts.length} items</span>`;
-          toggle.setAttribute(
-            "aria-label",
-            `${WAREHOUSE_LABELS[code]}, ${warehouseProducts.length} products`,
-          );
-          toggle.setAttribute(
-            "aria-expanded",
-            String(group.classList.contains("expanded")),
-          );
-          toggle.onclick = () => {
-            if (activeWarehouseCode === code) return;
-            activeWarehouseCode = code;
-            if (viewMode === "home") renderHome();
-          };
-          group.appendChild(toggle);
-
           const brandList = document.createElement("div");
           brandList.className = "warehouse-brand-list";
-          if (brands.length > 0) {
-            const allButton = document.createElement("button");
-            allButton.type = "button";
-            allButton.className = "warehouse-brand-item all-products";
-            allButton.textContent = `All ${code} products`;
-            allButton.onclick = () => switchToGrid(`Warehouse:${code}`);
-            brandList.appendChild(allButton);
 
+          const allButton = document.createElement("button");
+          allButton.type = "button";
+          allButton.className = "warehouse-brand-item all-products";
+          allButton.textContent = `All ${code} products`;
+          allButton.onclick = () => switchToGrid(`Warehouse:${code}`);
+          brandList.appendChild(allButton);
+
+          if (brands.length > 0) {
             brands.forEach((brand, index) => {
               const button = document.createElement("button");
               button.type = "button";
@@ -2268,10 +2316,8 @@
             empty.textContent = `${code} products are coming soon.`;
             brandList.appendChild(empty);
           }
-
-          group.appendChild(brandList);
-          container.appendChild(group);
-        });
+          container.appendChild(brandList);
+        }
         container.dataset.ready = "true";
       }
 
@@ -2346,6 +2392,7 @@
 
       // --- Home Render Logic ---
       function renderHome() {
+        ensureActiveWarehouse();
         const db = (window.perfumeDB || []).filter(
           (product) =>
             isProductAvailable(product) &&
@@ -2679,7 +2726,7 @@
               !FEATURED_BRANDS_LOWER.includes(productBrand)
             );
           });
-          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · Other Brands`;
+          title = `${getWarehouseLabelByCode(warehouseCode)} · Other Brands`;
         } else if (criteria.startsWith("WarehouseSale:")) {
           const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
           filtered = db
@@ -2689,7 +2736,7 @@
                 Number(product.sale) > 0,
             )
             .sort((a, b) => Number(a.sale) - Number(b.sale));
-          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · On Sale`;
+          title = `${getWarehouseLabelByCode(warehouseCode)} · On Sale`;
         } else if (criteria.startsWith("WarehouseSet:")) {
           const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
           filtered = db.filter(
@@ -2697,7 +2744,7 @@
               normalizeWarehouseCode(product.warehouse) === warehouseCode &&
               isGiftSetProduct(product),
           );
-          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · Gift Sets`;
+          title = `${getWarehouseLabelByCode(warehouseCode)} · Gift Sets`;
         } else if (criteria.startsWith("WarehouseBrand:")) {
           const parts = criteria.split(":");
           const warehouseCode = normalizeWarehouseCode(parts[1]);
@@ -2707,14 +2754,14 @@
               normalizeWarehouseCode(product.warehouse) === warehouseCode &&
               normalizeSearchText(product.brand) === normalizeSearchText(brand),
           );
-          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} · ${brand}`;
+          title = `${getWarehouseLabelByCode(warehouseCode)} · ${brand}`;
         } else if (criteria.startsWith("Warehouse:")) {
           const warehouseCode = normalizeWarehouseCode(criteria.split(":")[1]);
           filtered = db.filter(
             (product) =>
               normalizeWarehouseCode(product.warehouse) === warehouseCode,
           );
-          title = `${WAREHOUSE_LABELS[warehouseCode] || warehouseCode} Products`;
+          title = `${getWarehouseLabelByCode(warehouseCode)} Products`;
         } else if (criteria === "All") {
           filtered = groupProductsForDisplay(db, db);
           title = "All Products";
@@ -3052,7 +3099,7 @@
         const cartCounts = {};
         cartItems.forEach((item) => {
           const code = normalizeWarehouseCode(item.warehouse);
-          if (!WAREHOUSE_LABELS[code]) return;
+          if (!code) return;
           cartCounts[code] =
             (cartCounts[code] || 0) + (Number(item.quantity) || 0);
         });
@@ -3063,7 +3110,7 @@
             if (b[1] !== a[1]) return b[1] - a[1];
             if (a[0] === activeWarehouseCode) return -1;
             if (b[0] === activeWarehouseCode) return 1;
-            return WAREHOUSE_ORDER.indexOf(a[0]) - WAREHOUSE_ORDER.indexOf(b[0]);
+            return getWarehouseSortIndex(a[0]) - getWarehouseSortIndex(b[0]);
           });
 
         if (rankedCartWarehouses.length > 0) {
@@ -3075,7 +3122,7 @@
         if (availableCodes.has(activeWarehouseCode)) {
           return {
             code: activeWarehouseCode,
-            reason: `Recommended from your selected ${WAREHOUSE_LABELS[activeWarehouseCode]}.`,
+            reason: `Recommended from your selected ${getWarehouseLabelByCode(activeWarehouseCode)}.`,
           };
         }
         return {
@@ -3126,7 +3173,7 @@
             return `
               <button type="button" class="warehouse-choice-option${selected ? " selected" : ""}" aria-pressed="${selected}" onclick="selectWarehouseOption('${code}')">
                 <span class="warehouse-choice-option-main">
-                  <strong>${WAREHOUSE_LABELS[code]}</strong>
+                  <strong>${getWarehouseLabel(variant)}</strong>
                   <span class="warehouse-choice-sku">SKU ${variant.id}</span>
                 </span>
                 ${recommended ? '<span class="warehouse-recommended">Recommended</span>' : ""}
@@ -3198,6 +3245,7 @@
             brand: product.brand,
             ml: product.ml,
             warehouse: product.warehouse,
+            warehouse_name: getWarehouseLabel(product),
             quantity: 1,
           });
           showToast("Added to Cart! 🛒");

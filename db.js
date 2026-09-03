@@ -3,7 +3,7 @@
 // ==========================================
 
 const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFWYImNbJ0ao5z0VDk_VZwhOP1pnY2UZdFuwxtYOvKaNfEX4sInJh7uk-MlRSH9kffdZ5TjzhudLao/pub?gid=0&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFWYImNbJ0ao5z0VDk_VZwhOP1pnY2UZdFuwxtYOvKaNfEX4sInJh7uk-MlRSH9kffdZ5TjzhudLao/pub?gid=438226601&single=true&output=csv";
 
 // 缓存时间 (1分钟)
 const CACHE_DURATION = 1 * 60 * 1000;
@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V4";
-  const timeKey = "perfumeDB_Warehouse_Time_V4";
+  const cacheKey = "perfumeDB_Warehouse_Data_V5";
+  const timeKey = "perfumeDB_Warehouse_Time_V5";
 
   const now = new Date().getTime();
   const cachedTime = localStorage.getItem(timeKey);
