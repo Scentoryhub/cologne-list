@@ -1758,9 +1758,9 @@
       const itemsPerPage = 20;
       let currentGridData = [];
       let viewMode = "home";
-      let currentModalProductId = null;
+      let currentModalProductRef = null;
       let activeWarehouseCode = "TX";
-      let pendingWarehouseProductId = null;
+      let pendingWarehouseProductRef = null;
       let selectedWarehouseCode = null;
       let recommendedWarehouseCode = null;
 
@@ -1801,6 +1801,10 @@
           return "NE";
         }
         return normalized;
+      }
+
+      function normalizeSku(value) {
+        return String(value || "").trim().toUpperCase();
       }
 
       function isProductAvailable(product) {
@@ -1883,51 +1887,73 @@
       }
 
       function groupProductsForDisplay(matches, universe) {
-        const keyedVariants = new Map();
+        const skuVariants = new Map();
         (universe || matches).forEach((product) => {
-          const key = String(product.product_key || "").trim();
-          if (!key) return;
-          if (!keyedVariants.has(key)) keyedVariants.set(key, []);
-          keyedVariants.get(key).push(product);
+          const sku = normalizeSku(product.id);
+          if (!sku) return;
+          if (!skuVariants.has(sku)) skuVariants.set(sku, []);
+          skuVariants.get(sku).push(product);
         });
 
         const seen = new Set();
         const grouped = [];
         matches.forEach((product) => {
-          const key = String(product.product_key || "").trim();
-          const identity = key ? `key:${key}` : `sku:${product.id}`;
-          if (seen.has(identity)) return;
-          seen.add(identity);
-
-          if (!key) {
-            grouped.push(product);
-            return;
-          }
-
-          const variants = keyedVariants.get(key) || [product];
+          const sku = normalizeSku(product.id);
+          if (!sku || seen.has(sku)) return;
+          seen.add(sku);
+          const variants = skuVariants.get(sku) || [product];
           const displayVariant =
-            variants.find((variant) => variant.id === product.id) ||
+            variants.find(
+              (variant) =>
+                normalizeWarehouseCode(variant.warehouse) ===
+                normalizeWarehouseCode(product.warehouse),
+            ) ||
             variants.find(hasValidPrice) ||
             variants[0];
           grouped.push({
             ...displayVariant,
             _variants: variants,
-            _productKey: key,
           });
         });
         return grouped;
       }
 
-      function getRenderableProductById(id) {
-        if (viewMode === "grid") {
-          const gridProduct = currentGridData.find(
-            (product) => String(product.id) === String(id),
-          );
-          if (gridProduct) return gridProduct;
-        }
-        return (window.perfumeDB || []).find(
-          (product) => String(product.id) === String(id),
+      function getProductReference(product) {
+        const sku = normalizeSku(product && product.id);
+        const variants = getSelectableWarehouseVariants(product);
+        const warehouseCode =
+          variants.length > 1
+            ? "ALL"
+            : normalizeWarehouseCode(product && product.warehouse);
+        return `${sku}::${warehouseCode}`;
+      }
+
+      function getRenderableProductByRef(productRef) {
+        const separatorIndex = String(productRef || "").lastIndexOf("::");
+        if (separatorIndex < 0) return null;
+        const sku = normalizeSku(String(productRef).slice(0, separatorIndex));
+        const warehouseCode = normalizeWarehouseCode(
+          String(productRef).slice(separatorIndex + 2),
         );
+        const matchingProducts = (window.perfumeDB || []).filter(
+          (product) =>
+            normalizeSku(product.id) === sku && isProductAvailable(product),
+        );
+        if (matchingProducts.length === 0) return null;
+        if (warehouseCode !== "ALL") {
+          return (
+            matchingProducts.find(
+              (product) =>
+                normalizeWarehouseCode(product.warehouse) === warehouseCode,
+            ) || null
+          );
+        }
+        const displayVariant =
+          matchingProducts.find(hasValidPrice) || matchingProducts[0];
+        return {
+          ...displayVariant,
+          _variants: matchingProducts,
+        };
       }
 
       function getStockHtml(inventory) {
@@ -2277,19 +2303,26 @@
       }
 
       function getCartQtyForProduct(product) {
-        const variantIds = new Set(
-          getProductVariants(product).map((variant) => String(variant.id)),
+        const variantKeys = new Set(
+          getProductVariants(product).map(
+            (variant) =>
+              `${normalizeSku(variant.id)}::${normalizeWarehouseCode(variant.warehouse)}`,
+          ),
         );
         return cartItems.reduce(
           (total, item) =>
             total +
-            (variantIds.has(String(item.name)) ? Number(item.quantity) || 0 : 0),
+            (variantKeys.has(
+              `${normalizeSku(item.name)}::${normalizeWarehouseCode(item.warehouse)}`,
+            )
+              ? Number(item.quantity) || 0
+              : 0),
           0,
         );
       }
 
-      function getAddButtonHtml(id) {
-        const product = getRenderableProductById(id);
+      function getAddButtonHtml(productRef) {
+        const product = getRenderableProductByRef(productRef);
         const variants = getSelectableWarehouseVariants(product);
         if (!variants.some(hasValidPrice)) {
           return '<div class="price-pending-action">Available after pricing</div>';
@@ -2297,16 +2330,16 @@
         const qty = getCartQtyForProduct(product);
         if (variants.length > 1) {
           const label = qty > 0 ? `${qty} IN CART · ADD MORE` : "ADD TO CART";
-          return `<button class="action-btn-black" onclick="openWarehouseChoiceById('${id}'); event.stopPropagation();">${label}</button>`;
+          return `<button class="action-btn-black" onclick="openWarehouseChoiceByRef('${productRef}'); event.stopPropagation();">${label}</button>`;
         }
         if (qty === 0) {
-          return `<button class="action-btn-black" onclick="updateItemQty('${id}', 1); event.stopPropagation();">ADD TO CART</button>`;
+          return `<button class="action-btn-black" onclick="updateItemQty('${productRef}', 1); event.stopPropagation();">ADD TO CART</button>`;
         } else {
           return `
                 <div class="action-qty-box">
-                    <div class="qty-btn-rect" onclick="updateItemQty('${id}', -1); event.stopPropagation();">-</div>
+                    <div class="qty-btn-rect" onclick="updateItemQty('${productRef}', -1); event.stopPropagation();">-</div>
                     <div class="qty-val-rect">${qty}</div>
-                    <div class="qty-btn-rect" onclick="updateItemQty('${id}', 1); event.stopPropagation();">+</div>
+                    <div class="qty-btn-rect" onclick="updateItemQty('${productRef}', 1); event.stopPropagation();">+</div>
                 </div>`;
         }
       }
@@ -2451,9 +2484,10 @@
             getSelectableWarehouseVariants(p).length > 1
               ? ""
               : getStockHtml(p.inventory);
+          const productRef = getProductReference(p);
 
           // Use NEW button logic
-          const buttonHtml = getAddButtonHtml(p.id);
+          const buttonHtml = getAddButtonHtml(productRef);
 
           // 核心修改 2：给按钮包裹层统一增加 data-btn-wrap 属性，方便批量更新
           card.innerHTML = `
@@ -2469,7 +2503,7 @@
                     ${formatProductPrice(p)} ${stockHtml}
                     <span style="font-size:0.75rem; color:#666; font-weight:normal; margin-left:5px;">${p.ml ? formatSize(p) : ""}</span>
                 </div>
-                <div class="btn-qty-wrapper" data-btn-wrap="${p.id}">${buttonHtml}</div>
+                <div class="btn-qty-wrapper" data-btn-wrap="${productRef}">${buttonHtml}</div>
             </div>
           `;
           wrapper.appendChild(card);
@@ -2812,13 +2846,14 @@
             getSelectableWarehouseVariants(p).length > 1
               ? ""
               : getStockHtml(p.inventory);
+          const productRef = getProductReference(p);
 
           // Use NEW button logic
-          const buttonHtml = getAddButtonHtml(p.id);
+          const buttonHtml = getAddButtonHtml(productRef);
 
           // 核心修改 2：给按钮包裹层统一增加 data-btn-wrap 属性
           div.innerHTML = `
-              <div class="item-img-box skeleton-loader" onclick="openModalById('${p.id}')">
+              <div class="item-img-box skeleton-loader" onclick="openModalByRef('${productRef}')">
                   <picture><source srcset="${webpSrc}" type="image/webp"><img src="${imageSrc}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded'); this.parentElement.parentElement.classList.remove('skeleton-loader');" onerror="handleProductImageError(this); this.parentElement.parentElement.classList.remove('skeleton-loader');"></picture>
                   <div class="badges-container">${badgesHtml}</div>
               </div>
@@ -2826,7 +2861,7 @@
                  <div style="font-size:0.85rem; height:2.4em; overflow:hidden; margin-bottom:5px; line-height:1.2;">${getProductDisplayTitle(p)}</div>
                  <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">${p.brand}${genderText} ${getProductAvailabilityHtml(p)}<br>${formatSize(p)}</div>
                  <div class="item-price">${formatProductPrice(p)} ${stockHtml}</div>
-                 <div class="btn-qty-wrapper" data-btn-wrap="${p.id}">${buttonHtml}</div>
+                 <div class="btn-qty-wrapper" data-btn-wrap="${productRef}">${buttonHtml}</div>
               </div>
            `;
           gallery.appendChild(div);
@@ -2894,7 +2929,7 @@
       }
 
       window.openModal = function (product) {
-        currentModalProductId = product.id;
+        currentModalProductRef = getProductReference(product);
         document.getElementById("modal-img").src = getProductImage(product);
         document.getElementById("modal-title").textContent =
           getProductDisplayTitle(product);
@@ -2921,12 +2956,12 @@
 
         document.getElementById("modal-price").innerHTML =
           formatProductPrice(product);
-        updateModalButtonState(product.id);
+        updateModalButtonState(currentModalProductRef);
         document.getElementById("modal").classList.add("open");
       };
 
-      window.openModalById = function (id) {
-        const p = getRenderableProductById(id);
+      window.openModalByRef = function (productRef) {
+        const p = getRenderableProductByRef(productRef);
         if (p) openModal(p);
       };
 
@@ -2999,7 +3034,7 @@
 
       window.closeProductModal = function () {
         document.getElementById("modal").classList.remove("open");
-        currentModalProductId = null;
+        currentModalProductRef = null;
       };
 
       // Toast 函数供页面任何位置调用
@@ -3049,8 +3084,8 @@
         };
       }
 
-      window.openWarehouseChoiceById = function (id) {
-        const product = getRenderableProductById(id);
+      window.openWarehouseChoiceByRef = function (productRef) {
+        const product = getRenderableProductByRef(productRef);
         if (!product) return;
         const variants = getSelectableWarehouseVariants(product);
         const purchasableVariants = variants.filter(hasValidPrice);
@@ -3059,12 +3094,12 @@
           return;
         }
         if (purchasableVariants.length === 1) {
-          updateItemQty(purchasableVariants[0].id, 1);
+          updateItemQty(getProductReference(purchasableVariants[0]), 1);
           return;
         }
 
         const recommendation = getRecommendedWarehouse(purchasableVariants);
-        pendingWarehouseProductId = id;
+        pendingWarehouseProductRef = productRef;
         recommendedWarehouseCode = recommendation.code;
         selectedWarehouseCode = recommendation.code;
 
@@ -3079,7 +3114,7 @@
       };
 
       function renderWarehouseChoiceOptions() {
-        const product = getRenderableProductById(pendingWarehouseProductId);
+        const product = getRenderableProductByRef(pendingWarehouseProductRef);
         const options = document.getElementById("warehouse-choice-options");
         if (!product || !options) return;
         options.innerHTML = getSelectableWarehouseVariants(product)
@@ -3109,13 +3144,13 @@
         const modal = document.getElementById("warehouse-choice-modal");
         modal.classList.remove("open");
         modal.setAttribute("aria-hidden", "true");
-        pendingWarehouseProductId = null;
+        pendingWarehouseProductRef = null;
         selectedWarehouseCode = null;
         recommendedWarehouseCode = null;
       };
 
       window.confirmWarehouseChoice = function () {
-        const product = getRenderableProductById(pendingWarehouseProductId);
+        const product = getRenderableProductByRef(pendingWarehouseProductRef);
         const variant = getSelectableWarehouseVariants(product).find(
           (item) =>
             normalizeWarehouseCode(item.warehouse) === selectedWarehouseCode &&
@@ -3123,26 +3158,32 @@
         );
         if (!variant) return;
         closeWarehouseChoice();
-        updateItemQty(variant.id, 1);
+        updateItemQty(getProductReference(variant), 1);
       };
 
       function refreshProductButtons() {
         document.querySelectorAll("[data-btn-wrap]").forEach((wrap) => {
           wrap.innerHTML = getAddButtonHtml(wrap.getAttribute("data-btn-wrap"));
         });
-        if (currentModalProductId) updateModalButtonState(currentModalProductId);
+        if (currentModalProductRef)
+          updateModalButtonState(currentModalProductRef);
       }
 
-      window.updateItemQty = function (id, delta) {
-        const db = window.perfumeDB;
-        const product = db.find((p) => String(p.id) === String(id));
+      window.updateItemQty = function (productRef, delta) {
+        const product = getRenderableProductByRef(productRef);
         if (!product) return;
         if (!hasValidPrice(product)) {
           showToast("Price is pending for this item.");
           return;
         }
 
-        let existing = cartItems.find((c) => c.name === id);
+        const sku = normalizeSku(product.id);
+        const warehouseCode = normalizeWarehouseCode(product.warehouse);
+        let existing = cartItems.find(
+          (item) =>
+            normalizeSku(item.name) === sku &&
+            normalizeWarehouseCode(item.warehouse) === warehouseCode,
+        );
         if (!existing && delta > 0) {
           let sizeLabel = product.ml
             ? isNaN(Number(product.ml))
@@ -3150,8 +3191,8 @@
               : `(${product.ml}ml)`
             : "";
           cartItems.push({
-            name: id,
-            caption: `${id} - ${product.name} ${sizeLabel}`,
+            name: product.id,
+            caption: `${product.id} - ${product.name} ${sizeLabel}`,
             img: getProductImage(product),
             price: Number(product.price),
             brand: product.brand,
@@ -3163,7 +3204,13 @@
         } else if (existing) {
           existing.quantity += delta;
           if (existing.quantity <= 0)
-            cartItems = cartItems.filter((c) => c.name !== id);
+            cartItems = cartItems.filter(
+              (item) =>
+                !(
+                  normalizeSku(item.name) === sku &&
+                  normalizeWarehouseCode(item.warehouse) === warehouseCode
+                ),
+            );
         }
 
         saveCart();
@@ -3171,9 +3218,9 @@
         refreshProductButtons();
       };
 
-      function updateModalButtonState(id) {
+      function updateModalButtonState(productRef) {
         const container = document.getElementById("modal-action-area");
-        container.innerHTML = getAddButtonHtml(id);
+        container.innerHTML = getAddButtonHtml(productRef);
       }
 
       function loadCart() {
@@ -3197,7 +3244,7 @@
                 closeWarehouseChoice();
               } else {
                 o.classList.remove("open");
-                if (o.id === "modal") currentModalProductId = null;
+                if (o.id === "modal") currentModalProductRef = null;
               }
             }
           }),
