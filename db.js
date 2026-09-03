@@ -3,7 +3,7 @@
 // ==========================================
 
 const SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFWYImNbJ0ao5z0VDk_VZwhOP1pnY2UZdFuwxtYOvKaNfEX4sInJh7uk-MlRSH9kffdZ5TjzhudLao/pub?gid=438226601&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFWYImNbJ0ao5z0VDk_VZwhOP1pnY2UZdFuwxtYOvKaNfEX4sInJh7uk-MlRSH9kffdZ5TjzhudLao/pub?gid=1536830284&single=true&output=csv";
 
 // 缓存时间 (1分钟)
 const CACHE_DURATION = 1 * 60 * 1000;
@@ -16,43 +16,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V6";
-  const timeKey = "perfumeDB_Warehouse_Time_V6";
+  const cacheKey = "perfumeDB_Warehouse_Data_V7";
+  const timeKey = "perfumeDB_Warehouse_Time_V7";
+  const fallbackKey = "perfumeDB_Last_Valid_Data";
 
   const now = new Date().getTime();
   const cachedTime = localStorage.getItem(timeKey);
   const cachedData = localStorage.getItem(cacheKey);
 
-  // 1. 尝试加载缓存
-  if (cachedData && cachedTime && now - cachedTime < CACHE_DURATION) {
-    console.log("🚀 加载缓存数据");
+  function readValidCache(rawData) {
+    if (!rawData) return null;
     try {
-      window.perfumeDB = JSON.parse(cachedData);
-      runPageLogic();
-      return;
-    } catch (e) {
-      console.warn("缓存数据损坏，重新下载");
+      const parsed = JSON.parse(rawData);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+    } catch (error) {
+      return null;
     }
+  }
+
+  const cachedProducts = readValidCache(cachedData);
+
+  // 1. 尝试加载缓存
+  if (cachedProducts && cachedTime && now - cachedTime < CACHE_DURATION) {
+    console.log("🚀 加载缓存数据");
+    window.perfumeDB = cachedProducts;
+    runPageLogic();
+    return;
   }
 
   // 2. 下载新数据
   console.log("🌐 下载最新数据...");
   try {
-    const response = await fetch(SHEET_URL);
+    const response = await fetch(`${SHEET_URL}&_=${now}`, { cache: "no-store" });
     if (!response.ok) throw new Error("网络响应错误");
     const data = await response.text();
-    window.perfumeDB = parseCSV(data);
+    const products = parseCSV(data);
+    if (products.length === 0) throw new Error("产品数据为空");
+    window.perfumeDB = products;
 
     // 存入缓存
     localStorage.setItem(cacheKey, JSON.stringify(window.perfumeDB));
     localStorage.setItem(timeKey, now);
+    localStorage.setItem(fallbackKey, JSON.stringify(window.perfumeDB));
 
     runPageLogic();
   } catch (error) {
     console.error("下载失败:", error);
-    // 如果下载失败但有旧缓存（即使是旧版本的），作为备用加载
-    if (cachedData) {
-      window.perfumeDB = JSON.parse(cachedData);
+    // 数据源异常时保留上一次成功加载的商品，避免页面突然变空。
+    const fallbackProducts =
+      cachedProducts ||
+      readValidCache(localStorage.getItem(fallbackKey)) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V5")) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V4"));
+    if (fallbackProducts) {
+      window.perfumeDB = fallbackProducts;
       runPageLogic();
       alert("网络较慢，已加载离线数据");
     }
