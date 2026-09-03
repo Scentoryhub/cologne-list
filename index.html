@@ -1692,7 +1692,7 @@
       </div>
     </div>
 
-    <script src="db.js?v=7"></script>
+    <script src="db.js?v=8"></script>
     <script>
       // ================= Catalog & Checkout Logic =================
       const WHATSAPP_NUMBER = "16232027321";
@@ -2141,37 +2141,7 @@
           return;
         }
 
-        const {
-          totalQty,
-          lvCount,
-          otherCount,
-          subtotal,
-          discountPercent,
-          discountAmount,
-          shipping,
-          finalTotal,
-        } = getCartOrderSummary();
-
-        let msg = `*New Order Request* 📦\n`;
-        msg += `----------------------------\n`;
-
-        cartItems.forEach((item) => {
-          const warehouse = item.warehouse
-            ? ` [${getWarehouseLabelByCode(item.warehouse)}]`
-            : "";
-          msg += `${item.caption}${warehouse} x *${item.quantity}*\n\n`;
-        });
-
-        msg += `----------------------------\n`;
-        msg += `LV Quantity: ${lvCount}\n`;
-        msg += `Other Quantity: ${otherCount}\n`;
-        msg += `*Total Quantity: ${totalQty} pcs*\n`;
-        msg += `----------------------------\n`;
-        msg += `Subtotal: $${subtotal.toFixed(2)}\n`;
-        msg += `Discount (${Math.round(discountPercent * 100)}%): -$${discountAmount.toFixed(2)}\n`;
-        msg += `Shipping: ${shipping === 0 ? "FREE" : "$" + shipping.toFixed(2)}\n`;
-        msg += `*Total Amount:* $${Math.round(finalTotal).toFixed(2)}`;
-
+        const msg = buildWhatsAppOrderMessage(cartItems, discountTiers);
         const encodedMsg = encodeURIComponent(msg);
         window.open(
           `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMsg}`,

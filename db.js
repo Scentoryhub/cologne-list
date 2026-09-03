@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V7";
-  const timeKey = "perfumeDB_Warehouse_Time_V7";
+  const cacheKey = "perfumeDB_Warehouse_Data_V8";
+  const timeKey = "perfumeDB_Warehouse_Time_V8";
   const fallbackKey = "perfumeDB_Last_Valid_Data";
 
   const now = new Date().getTime();
@@ -66,6 +66,7 @@ async function initProductData() {
     const fallbackProducts =
       cachedProducts ||
       readValidCache(localStorage.getItem(fallbackKey)) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V7")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V5")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V4"));
     if (fallbackProducts) {
@@ -81,6 +82,85 @@ function runPageLogic() {
   if (typeof renderHome === "function") renderHome();
   if (typeof renderCart === "function") renderCart();
 }
+
+function buildWhatsAppOrderMessage(items, discountTiers) {
+  const cart = (Array.isArray(items) ? items : []).filter(
+    (item) => (Number(item.quantity) || 0) > 0,
+  );
+  let totalQty = 0;
+  let lvCount = 0;
+  let otherCount = 0;
+  let subtotal = 0;
+  const warehouseGroups = new Map();
+
+  cart.forEach((item) => {
+    const quantity = Number(item.quantity) || 0;
+    const unitPrice = Number(item.price) || 0;
+    const warehouseCode = String(item.warehouse || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+WAREHOUSE$/, "")
+      .trim();
+    const groupKey = warehouseCode || "UNASSIGNED";
+
+    totalQty += quantity;
+    subtotal += unitPrice * quantity;
+    if (String(item.caption || "").toLowerCase().includes("louis vuitton")) {
+      lvCount += quantity;
+    } else {
+      otherCount += quantity;
+    }
+
+    if (!warehouseGroups.has(groupKey)) {
+      warehouseGroups.set(groupKey, {
+        label: warehouseCode
+          ? `${warehouseCode} Warehouse`
+          : "Warehouse not selected",
+        items: [],
+      });
+    }
+    warehouseGroups.get(groupKey).items.push({
+      caption: String(item.caption || item.name || "Product").trim(),
+      quantity,
+      unitPrice,
+      lineSubtotal: unitPrice * quantity,
+    });
+  });
+
+  const tiers = Array.isArray(discountTiers) ? discountTiers : [];
+  const tier =
+    tiers.find((item) => totalQty >= item.min && totalQty <= item.max) ||
+    tiers[0] ||
+    { percent: 0 };
+  const discountPercent = Number(tier.percent) || 0;
+  const discountAmount = subtotal * discountPercent;
+  const shipping = totalQty === 1 ? 10 : 0;
+  const finalTotal = subtotal - discountAmount + shipping;
+
+  let message = `*New Order Request* 📦\n`;
+  message += `----------------------------\n`;
+  warehouseGroups.forEach((group) => {
+    message += `*${group.label}*\n`;
+    group.items.forEach((item) => {
+      message += `• ${item.caption}\n`;
+      message += `  Unit $${item.unitPrice.toFixed(2)} × ${item.quantity} = Line subtotal *$${item.lineSubtotal.toFixed(2)}*\n`;
+    });
+    message += `\n`;
+  });
+
+  message += `----------------------------\n`;
+  message += `LV Quantity: ${lvCount}\n`;
+  message += `Other Quantity: ${otherCount}\n`;
+  message += `*Total Quantity: ${totalQty} pcs*\n`;
+  message += `----------------------------\n`;
+  message += `Subtotal: $${subtotal.toFixed(2)}\n`;
+  message += `Discount (${Math.round(discountPercent * 100)}%): -$${discountAmount.toFixed(2)}\n`;
+  message += `Shipping: ${shipping === 0 ? "FREE" : "$" + shipping.toFixed(2)}\n`;
+  message += `*Total Amount:* $${finalTotal.toFixed(2)}`;
+  return message;
+}
+
+window.buildWhatsAppOrderMessage = buildWhatsAppOrderMessage;
 
 function parseCSV(csvText) {
   const lines = csvText.trim().split("\n");

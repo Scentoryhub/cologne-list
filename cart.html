@@ -564,7 +564,7 @@
       </button>
     </div>
 
-    <script src="db.js?v=7"></script>
+    <script src="db.js?v=8"></script>
     <script>
       // ================= UI Logic =================
       function toggleSidebar() {
@@ -804,53 +804,7 @@
         const cart = loadCart();
         if (cart.length === 0) return alert("Cart is empty");
 
-        let totalQty = 0;
-        let lvCount = 0;
-        let otherCount = 0;
-        let subtotal = 0;
-
-        cart.forEach((item) => {
-          const qty = item.quantity;
-          const price = Number(item.price) || 0;
-          totalQty += qty;
-          subtotal += price * qty;
-          if (item.caption.toLowerCase().includes("louis vuitton")) {
-            lvCount += qty;
-          } else {
-            otherCount += qty;
-          }
-        });
-
-        // 1. 使用 \n 来代替 %0A，让 JS 字符串自然换行
-        let msg = `*New Order Request* 📦\n`;
-        msg += `----------------------------\n`;
-
-        cart.forEach((item) => {
-          // 这里不需要手动处理 &，因为最后会统一 encode
-          const warehouse = normalizeWarehouseLabel(item.warehouse);
-          msg += `${item.caption}${warehouse ? ` [${warehouse}]` : ""} x *${item.quantity}*\n\n`;
-        });
-
-        const tier =
-          tiers.find((t) => totalQty >= t.min && totalQty <= t.max) ||
-          tiers[0];
-        const discountVal = subtotal * tier.percent;
-        const shipping = totalQty === 1 ? 10 : 0;
-        const finalTotal = subtotal - discountVal + shipping;
-
-        msg += `----------------------------\n`;
-        msg += `LV Quantity: ${lvCount}\n`;
-        msg += `Other Quantity: ${otherCount}\n`;
-        msg += `*Total Quantity: ${totalQty} pcs*\n`;
-
-        msg += `----------------------------\n`;
-        msg += `Subtotal: $${subtotal.toFixed(2)}\n`;
-        msg += `Discount (${Math.round(tier.percent * 100)}%): -$${discountVal.toFixed(2)}\n`;
-        msg += `Shipping: ${shipping === 0 ? "FREE" : "$" + shipping.toFixed(2)}\n`;
-        msg += `*Total Amount:* $${Math.round(finalTotal).toFixed(2)}`;
-
-        // 2. 关键步骤：使用 encodeURIComponent 对整个消息进行编码
-        // 这样 & 会被转换为 %26，换行符 \n 会被转换为 %0A，避免链接截断
+        const msg = buildWhatsAppOrderMessage(cart, tiers);
         const encodedMsg = encodeURIComponent(msg);
 
         window.open(
