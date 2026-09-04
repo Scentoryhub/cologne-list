@@ -540,7 +540,7 @@
           Volume Discounts
         </h3>
         <p style="margin:8px 0 0; color:#7b6020; font-size:0.85rem; font-weight:700;">
-          1 item: $10 shipping · 2+ items: FREE shipping
+          1 item: $10 shipping · 2 items: $15 shipping · 3+ items: FREE shipping
         </p>
         <div id="tiers-list" class="tiers-grid"></div>
       </div>
@@ -564,7 +564,7 @@
       </button>
     </div>
 
-    <script src="db.js?v=8"></script>
+    <script src="db.js?v=9"></script>
     <script>
       // ================= UI Logic =================
       function toggleSidebar() {
@@ -622,16 +622,11 @@
       }
 
       const tiers = [
-        { min: 1, max: 1, percent: 0 },
-        { min: 2, max: 2, percent: 0.03 },
-        { min: 3, max: 4, percent: 0.05 },
-        { min: 5, max: 9, percent: 0.08 },
-        { min: 10, max: 19, percent: 0.14 },
-        { min: 20, max: 29, percent: 0.24 },
-        { min: 30, max: 49, percent: 0.26 },
-        { min: 50, max: 79, percent: 0.29 },
-        { min: 80, max: 100, percent: 0.32 },
-        { min: 101, max: Infinity, percent: 0.35 },
+        { min: 1, max: 9, percent: 0 },
+        { min: 10, max: 19, percent: 0.03 },
+        { min: 20, max: 39, percent: 0.05 },
+        { min: 40, max: 79, percent: 0.15 },
+        { min: 80, max: Infinity, percent: 0.2 },
       ];
 
       function loadCart() {
@@ -725,7 +720,7 @@
           (t) => totalQty >= t.min && totalQty <= t.max,
         ) || { percent: 0 };
         const discountVal = subtotal * tier.percent;
-        const shipping = totalQty === 1 ? 10 : 0;
+        const shipping = getShippingCost(totalQty);
         const finalTotal = subtotal - discountVal + shipping;
 
         // Render Summary
@@ -738,11 +733,11 @@
         ).toFixed(0)}%)`;
         summaryEls.shipping.textContent =
           shipping === 0 ? "FREE" : `$${shipping.toFixed(2)}`;
-        summaryEls.total.textContent = `$${Math.round(finalTotal).toFixed(2)}`;
+        summaryEls.total.textContent = `$${finalTotal.toFixed(2)}`;
 
         // Upsell Logic
         const nextTier = tiers.find((t) => t.min > totalQty);
-        if (nextTier && totalQty >= 5) {
+        if (nextTier) {
           const needed = nextTier.min - totalQty;
           if (needed <= 5) {
             summaryEls.upsell.style.display = "block";

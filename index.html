@@ -394,6 +394,44 @@
         font-weight: 700;
         line-height: 1.35;
       }
+      .curated-shortcuts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 12px 0 2px;
+      }
+      .curated-shortcut {
+        min-height: 50px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 215, 0, 0.42);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 800;
+        letter-spacing: 0.35px;
+        text-align: left;
+        transition:
+          background 0.2s ease,
+          border-color 0.2s ease,
+          transform 0.2s ease;
+      }
+      .curated-shortcut span {
+        display: block;
+        margin-top: 2px;
+        color: rgba(255, 255, 255, 0.58);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0;
+      }
+      .curated-shortcut:hover,
+      .curated-shortcut:focus-visible {
+        border-color: #ffd700;
+        background: rgba(255, 215, 0, 0.14);
+        transform: translateY(-1px);
+      }
       .quick-warehouse-heading {
         margin-top: 12px;
         padding-top: 10px;
@@ -1443,9 +1481,25 @@
         <div class="quick-guide-copy">
           <h1 class="quick-guide-title">Build Your Order List</h1>
           <p class="quick-guide-subtitle">
-            Add items to cart. Discounts calculate automatically. One item
-            ships for $10; orders of 2+ items ship free.
+            Add items to cart. Discounts calculate automatically. Three or
+            more items ship free.
           </p>
+        </div>
+        <div class="curated-shortcuts" aria-label="Featured collections">
+          <button
+            class="curated-shortcut"
+            type="button"
+            onclick="switchToGrid('HotSelling')"
+          >
+            HOT SELLING<span>Ranked by your sheet</span>
+          </button>
+          <button
+            class="curated-shortcut"
+            type="button"
+            onclick="switchToGrid('NewArrival')"
+          >
+            NEW ARRIVALS<span>Newest priorities first</span>
+          </button>
         </div>
         <div class="quick-warehouse-heading">
           <h2>Shop by Warehouse</h2>
@@ -1486,8 +1540,8 @@
         </div>
         <div class="trust-item">
           <div style="font-size: 2rem; margin-bottom: 10px">🚚</div>
-          <h4>Free Shipping on 2+</h4>
-          <p>Single-item orders ship for $10.</p>
+          <h4>Free Shipping on 3+</h4>
+          <p>1 item ships for $10; 2 items ship for $15.</p>
         </div>
         <div class="trust-item">
           <div style="font-size: 2rem; color: #3498db; margin-bottom: 10px">
@@ -1692,45 +1746,65 @@
       </div>
     </div>
 
-    <script src="db.js?v=8"></script>
+    <script src="db.js?v=9"></script>
     <script>
       // ================= Catalog & Checkout Logic =================
       const WHATSAPP_NUMBER = "16232027321";
 
       // ... (Rest of existing JS functions: loadCart, saveCart, updateWholesaleBanner, etc.)
       const FEATURED_BRANDS = [
-        "Creed",
-        "Dior",
-        "Chanel",
         "Tom Ford",
-        "Yves Saint Laurent",
-        "Louis Vuitton",
+        "Chanel",
         "Gucci",
-        "Carolina Herrera",
         "Valentino",
-        "Maison Francis Kurkdjian",
-        "Parfums de Marly",
-        "Jean Paul Gaultier",
-        "Xerjoff",
-        "Bond No. 9",
-        "Initio",
+        "Lancôme",
+        "Yves Saint Laurent",
         "Paco Rabanne",
-        "Giorgio Armani",
-        "Burberry",
+        "Creed",
+        "Jean Paul Gaultier",
+        "Maison Francis Kurkdjian",
+        "Dior",
         "Versace",
+        "Giorgio Armani",
+        "Prada",
+        "Xerjoff",
+        "Louis Vuitton",
+        "Carolina Herrera",
+        "Burberry",
+        "Initio",
+        "Ralph Lauren",
+        "Parfums de Marly",
+        "Le Labo",
+        "Amouage",
+        "Givenchy",
+        "Kayali",
+        "Kilian",
+        "Azzaro",
+        "Byredo",
+        "Hugo Boss",
+        "Dolce & Gabbana",
+        "Mugler",
+        "Xerjoff Casamorati",
+        "Victoria's Secret",
+        "Bond No. 9",
+        "Penhaligon's",
+        "Marc Jacobs",
+        "Armaf",
+        "Jo Malone",
+        "Viktor&Rolf",
+        "Hermès",
+        "Bvlgari",
+        "Moschino",
       ];
-      const FEATURED_BRANDS_LOWER = FEATURED_BRANDS.map((b) => b.toLowerCase());
+      const FEATURED_BRANDS_LOWER = FEATURED_BRANDS.map((brand) =>
+        normalizeSearchText(brand),
+      );
       const discountTiers = [
-        { min: 1, max: 1, percent: 0 },
-        { min: 2, max: 2, percent: 0.03 },
-        { min: 3, max: 4, percent: 0.05 },
-        { min: 5, max: 9, percent: 0.08 },
-        { min: 10, max: 19, percent: 0.14 },
-        { min: 20, max: 29, percent: 0.24 },
-        { min: 30, max: 49, percent: 0.26 },
-        { min: 50, max: 79, percent: 0.29 },
-        { min: 80, max: 100, percent: 0.32 },
-        { min: 101, max: Infinity, percent: 0.35 },
+        { min: 1, max: 9, percent: 0 },
+        { min: 10, max: 19, percent: 0.03 },
+        { min: 20, max: 39, percent: 0.05 },
+        { min: 40, max: 79, percent: 0.15 },
+        { min: 80, max: Infinity, percent: 0.2 },
       ];
       const MOBILE_BRAND_LIMIT = 10;
       const DEFAULT_PRODUCT_IMAGE =
@@ -1746,6 +1820,7 @@
       let viewMode = "home";
       let currentModalProductRef = null;
       let activeWarehouseCode = "";
+      let expandedWarehouseCode = "";
       let pendingWarehouseProductRef = null;
       let selectedWarehouseCode = null;
       let recommendedWarehouseCode = null;
@@ -1840,6 +1915,32 @@
         return String(value || "").trim().toUpperCase();
       }
 
+      function getBrandOrderIndex(value) {
+        const normalizedBrand = normalizeSearchText(value);
+        const index = FEATURED_BRANDS_LOWER.indexOf(normalizedBrand);
+        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+      }
+
+      function compareBrandsByListOrder(a, b) {
+        const rankDifference = getBrandOrderIndex(a) - getBrandOrderIndex(b);
+        return rankDifference || String(a).localeCompare(String(b));
+      }
+
+      function isFeaturedBrand(value) {
+        return FEATURED_BRANDS_LOWER.includes(normalizeSearchText(value));
+      }
+
+      function getProductFamilyKey(product) {
+        const sku = normalizeSku(product && product.id);
+        const warehouseCode = normalizeWarehouseCode(
+          product && product.warehouse,
+        );
+        if (warehouseCode && sku.startsWith(`${warehouseCode}-`)) {
+          return sku.slice(warehouseCode.length + 1);
+        }
+        return sku;
+      }
+
       function isProductAvailable(product) {
         const stock = product ? product.stock : "";
         return stock === "" || stock === null || stock === undefined
@@ -1886,6 +1987,23 @@
           : [product];
       }
 
+      function getProductWeight(product, fieldName) {
+        const weights = getProductVariants(product)
+          .map((variant) => Number(variant[fieldName]))
+          .filter((weight) => Number.isFinite(weight) && weight > 0);
+        return weights.length > 0 ? Math.min(...weights) : Infinity;
+      }
+
+      function getRankedProducts(products, fieldName) {
+        return groupProductsForDisplay(
+          products.filter((product) => Number(product[fieldName]) > 0),
+          products,
+        ).sort(
+          (a, b) =>
+            getProductWeight(a, fieldName) - getProductWeight(b, fieldName),
+        );
+      }
+
       function getSelectableWarehouseVariants(product) {
         const bestByWarehouse = new Map();
         getProductVariants(product)
@@ -1922,21 +2040,21 @@
       }
 
       function groupProductsForDisplay(matches, universe) {
-        const skuVariants = new Map();
+        const productVariants = new Map();
         (universe || matches).forEach((product) => {
-          const sku = normalizeSku(product.id);
-          if (!sku) return;
-          if (!skuVariants.has(sku)) skuVariants.set(sku, []);
-          skuVariants.get(sku).push(product);
+          const familyKey = getProductFamilyKey(product);
+          if (!familyKey) return;
+          if (!productVariants.has(familyKey)) productVariants.set(familyKey, []);
+          productVariants.get(familyKey).push(product);
         });
 
         const seen = new Set();
         const grouped = [];
         matches.forEach((product) => {
-          const sku = normalizeSku(product.id);
-          if (!sku || seen.has(sku)) return;
-          seen.add(sku);
-          const variants = skuVariants.get(sku) || [product];
+          const familyKey = getProductFamilyKey(product);
+          if (!familyKey || seen.has(familyKey)) return;
+          seen.add(familyKey);
+          const variants = productVariants.get(familyKey) || [product];
           const displayVariant =
             variants.find(
               (variant) =>
@@ -1954,25 +2072,28 @@
       }
 
       function getProductReference(product) {
-        const sku = normalizeSku(product && product.id);
+        const familyKey = getProductFamilyKey(product);
         const variants = getSelectableWarehouseVariants(product);
         const warehouseCode =
           variants.length > 1
             ? "ALL"
             : normalizeWarehouseCode(product && product.warehouse);
-        return `${sku}::${warehouseCode}`;
+        return `${familyKey}::${warehouseCode}`;
       }
 
       function getRenderableProductByRef(productRef) {
         const separatorIndex = String(productRef || "").lastIndexOf("::");
         if (separatorIndex < 0) return null;
-        const sku = normalizeSku(String(productRef).slice(0, separatorIndex));
+        const familyKey = normalizeSku(
+          String(productRef).slice(0, separatorIndex),
+        );
         const warehouseCode = normalizeWarehouseCode(
           String(productRef).slice(separatorIndex + 2),
         );
         const matchingProducts = (window.perfumeDB || []).filter(
           (product) =>
-            normalizeSku(product.id) === sku && isProductAvailable(product),
+            getProductFamilyKey(product) === familyKey &&
+            isProductAvailable(product),
         );
         if (matchingProducts.length === 0) return null;
         if (warehouseCode !== "ALL") {
@@ -2007,7 +2128,7 @@
         if (banner && content) {
           if (qty === 0) {
             banner.className = "ws-banner";
-            content.innerHTML = `<div class="ws-pill">1 item <span>$10 shipping</span></div><div class="ws-pill">2+ <span>FREE shipping</span></div><div class="ws-pill">5+ <span>-8%</span></div><div class="ws-pill">20+ <span>-24%</span></div><div class="ws-pill">101+ <span>-35%</span></div>`;
+            content.innerHTML = `<div class="ws-pill">1 item <span>$10 shipping</span></div><div class="ws-pill">2 items <span>$15 shipping</span></div><div class="ws-pill">3+ <span>FREE shipping</span></div><div class="ws-pill">10+ <span>-3%</span></div><div class="ws-pill">40+ <span>-15%</span></div><div class="ws-pill">80+ <span>-20%</span></div>`;
           } else {
             let currentTier =
               discountTiers.find((t) => qty >= t.min && qty <= t.max) ||
@@ -2021,7 +2142,11 @@
             let html = `<div class="ws-progress-box">`;
             let currentOff = Math.round(currentTier.percent * 100);
             const shippingMessage =
-              qty === 1 ? "$10 shipping" : "FREE shipping unlocked";
+              qty === 1
+                ? "$10 shipping"
+                : qty === 2
+                  ? "$15 shipping"
+                  : "FREE shipping unlocked";
             html += `<div class="ws-progress-text">Cart: <strong>${qty}</strong> items • <span class="ws-highlight">${shippingMessage}</span> • Current: <span class="ws-highlight">-${currentOff}% OFF</span></div>`;
             if (nextTier) {
               let needMore = nextTier.min - qty;
@@ -2070,7 +2195,7 @@
           (t) => totalQty >= t.min && totalQty <= t.max,
         );
         const discountPercent = tier ? tier.percent : 0;
-        const shipping = totalQty === 1 ? 10 : 0;
+        const shipping = getShippingCost(totalQty);
         const finalTotal = subtotal - subtotal * discountPercent + shipping;
 
         // Update Price Text & Strikethrough
@@ -2082,13 +2207,13 @@
           priceEl.style.color = "#999";
           originalEl.style.display = "none";
         } else {
-          priceEl.textContent = "$" + Math.round(finalTotal);
+          priceEl.textContent = "$" + finalTotal.toFixed(2);
           priceEl.style.color = "#000"; // Big Black Price
 
           // Show Strikethrough if discount > 0
           if (discountPercent > 0) {
             originalEl.textContent =
-              "~~$" + (subtotal + shipping).toFixed(0) + "~~";
+              "~~$" + (subtotal + shipping).toFixed(2) + "~~";
             originalEl.style.display = "inline-block";
           } else {
             originalEl.style.display = "none";
@@ -2119,7 +2244,7 @@
           discountTiers[0];
         const discountPercent = tier ? tier.percent : 0;
         const discountAmount = subtotal * discountPercent;
-        const shipping = totalQty === 1 ? 10 : 0;
+        const shipping = getShippingCost(totalQty);
         const finalTotal = subtotal - discountAmount + shipping;
 
         return {
@@ -2195,16 +2320,18 @@
           );
           const toggle = document.createElement("button");
           toggle.type = "button";
-          toggle.className = `warehouse-toggle${code === activeWarehouseCode ? " active" : ""}`;
+          const isExpanded = code === expandedWarehouseCode;
+          toggle.className = `warehouse-toggle${isExpanded ? " active" : ""}`;
           toggle.innerHTML = `<span class="warehouse-toggle-label">${label}</span><span class="warehouse-count">${warehouseProducts.length} items</span>`;
           toggle.setAttribute(
             "aria-label",
             `${label}, ${warehouseProducts.length} products`,
           );
-          toggle.setAttribute("aria-pressed", String(code === activeWarehouseCode));
+          toggle.setAttribute("aria-expanded", String(isExpanded));
           toggle.onclick = () => {
-            if (activeWarehouseCode === code) return;
-            activeWarehouseCode = code;
+            const shouldExpand = expandedWarehouseCode !== code;
+            expandedWarehouseCode = shouldExpand ? code : "";
+            if (shouldExpand) activeWarehouseCode = code;
             if (viewMode === "home") renderHome();
             else renderWarehouseMenu();
           };
@@ -2213,7 +2340,7 @@
         container.appendChild(tabs);
 
         const activeWarehouse = warehouseCatalog.find(
-          (warehouse) => warehouse.code === activeWarehouseCode,
+          (warehouse) => warehouse.code === expandedWarehouseCode,
         );
         if (activeWarehouse) {
           const code = activeWarehouse.code;
@@ -2226,7 +2353,7 @@
                 .map((product) => String(product.brand || "").trim())
                 .filter(Boolean),
             ),
-          ).sort((a, b) => a.localeCompare(b));
+          ).sort(compareBrandsByListOrder);
           const brandList = document.createElement("div");
           brandList.className = "warehouse-brand-list";
 
@@ -2429,7 +2556,7 @@
       }
 
       function isGiftSetProduct(product) {
-        const id = String(product.id || "").trim().toUpperCase();
+        const id = getProductFamilyKey(product);
         const name = String(product.name || "").toUpperCase();
         const size = String(product.ml || "").toUpperCase();
         return (
@@ -2474,9 +2601,9 @@
           };
 
           let badgesHtml = "";
-          if (p.top == 1)
+          if (Number.isFinite(getProductWeight(p, "hot_selling_weight")))
             badgesHtml += '<div class="badge-tag badge-hot">HOT</div>';
-          if (p.new == 1)
+          if (Number.isFinite(getProductWeight(p, "new_arrival_weight")))
             badgesHtml += '<div class="badge-tag badge-new">NEW</div>';
           if (p.sale == 1)
             badgesHtml += '<div class="badge-tag badge-sale">SALE</div>';
@@ -2682,7 +2809,7 @@
             return (
               normalizeWarehouseCode(product.warehouse) === warehouseCode &&
               productBrand &&
-              !FEATURED_BRANDS_LOWER.includes(productBrand)
+              !isFeaturedBrand(productBrand)
             );
           });
           title = `${getWarehouseLabelByCode(warehouseCode)} · Other Brands`;
@@ -2721,6 +2848,12 @@
               normalizeWarehouseCode(product.warehouse) === warehouseCode,
           );
           title = `${getWarehouseLabelByCode(warehouseCode)} Products`;
+        } else if (criteria === "HotSelling") {
+          filtered = getRankedProducts(db, "hot_selling_weight");
+          title = "Hot Selling";
+        } else if (criteria === "NewArrival") {
+          filtered = getRankedProducts(db, "new_arrival_weight");
+          title = "New Arrivals";
         } else if (criteria === "All") {
           filtered = groupProductsForDisplay(db, db);
           title = "All Products";
@@ -2803,8 +2936,8 @@
           filtered = groupProductsForDisplay(filtered, db);
         } else if (criteria === "Other") {
           filtered = db.filter((p) => {
-            const pBrandLower = p.brand ? p.brand.toLowerCase() : "";
-            return pBrandLower && !FEATURED_BRANDS_LOWER.includes(pBrandLower);
+            const pBrand = p.brand ? String(p.brand) : "";
+            return pBrand && !isFeaturedBrand(pBrand);
           });
           title = "More Brands";
         } else {
@@ -2836,9 +2969,9 @@
           const div = document.createElement("div");
           div.className = "item";
           let badgesHtml = "";
-          if (p.top == 1)
+          if (Number.isFinite(getProductWeight(p, "hot_selling_weight")))
             badgesHtml += '<div class="badge-tag badge-hot">HOT</div>';
-          if (p.new == 1)
+          if (Number.isFinite(getProductWeight(p, "new_arrival_weight")))
             badgesHtml += '<div class="badge-tag badge-new">NEW</div>';
           if (p.sale == 1)
             badgesHtml += '<div class="badge-tag badge-sale">SALE</div>';

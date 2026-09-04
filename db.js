@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V8";
-  const timeKey = "perfumeDB_Warehouse_Time_V8";
+  const cacheKey = "perfumeDB_Warehouse_Data_V9";
+  const timeKey = "perfumeDB_Warehouse_Time_V9";
   const fallbackKey = "perfumeDB_Last_Valid_Data";
 
   const now = new Date().getTime();
@@ -66,6 +66,7 @@ async function initProductData() {
     const fallbackProducts =
       cachedProducts ||
       readValidCache(localStorage.getItem(fallbackKey)) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V8")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V7")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V5")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V4"));
@@ -81,6 +82,14 @@ function runPageLogic() {
   // 确保首页和购物车逻辑存在才执行
   if (typeof renderHome === "function") renderHome();
   if (typeof renderCart === "function") renderCart();
+}
+
+function getShippingCost(totalQuantity) {
+  const quantity = Number(totalQuantity) || 0;
+  if (quantity <= 0) return 0;
+  if (quantity === 1) return 10;
+  if (quantity === 2) return 15;
+  return 0;
 }
 
 function buildWhatsAppOrderMessage(items, discountTiers) {
@@ -134,7 +143,7 @@ function buildWhatsAppOrderMessage(items, discountTiers) {
     { percent: 0 };
   const discountPercent = Number(tier.percent) || 0;
   const discountAmount = subtotal * discountPercent;
-  const shipping = totalQty === 1 ? 10 : 0;
+  const shipping = getShippingCost(totalQty);
   const finalTotal = subtotal - discountAmount + shipping;
 
   let message = `*New Order Request* 📦\n`;
@@ -161,6 +170,7 @@ function buildWhatsAppOrderMessage(items, discountTiers) {
 }
 
 window.buildWhatsAppOrderMessage = buildWhatsAppOrderMessage;
+window.getShippingCost = getShippingCost;
 
 function parseCSV(csvText) {
   const lines = csvText.trim().split("\n");
@@ -204,7 +214,9 @@ function parseCSV(csvText) {
         if (
           header === "price" ||
           header === "stock" ||
-          header === "inventory"
+          header === "inventory" ||
+          header === "hot_selling_weight" ||
+          header === "new_arrival_weight"
         ) {
           val = val === "" ? "" : Number(val);
         }
