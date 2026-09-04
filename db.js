@@ -16,8 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V9";
-  const timeKey = "perfumeDB_Warehouse_Time_V9";
+  const cacheKey = "perfumeDB_Warehouse_Data_V10";
+  const timeKey = "perfumeDB_Warehouse_Time_V10";
   const fallbackKey = "perfumeDB_Last_Valid_Data";
 
   const now = new Date().getTime();
@@ -66,6 +66,7 @@ async function initProductData() {
     const fallbackProducts =
       cachedProducts ||
       readValidCache(localStorage.getItem(fallbackKey)) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V9")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V8")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V7")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V5")) ||
@@ -130,6 +131,7 @@ function buildWhatsAppOrderMessage(items, discountTiers) {
     }
     warehouseGroups.get(groupKey).items.push({
       caption: String(item.caption || item.name || "Product").trim(),
+      size: formatOrderSize(item.ml),
       quantity,
       unitPrice,
       lineSubtotal: unitPrice * quantity,
@@ -151,7 +153,13 @@ function buildWhatsAppOrderMessage(items, discountTiers) {
   warehouseGroups.forEach((group) => {
     message += `*${group.label}*\n`;
     group.items.forEach((item) => {
-      message += `• ${item.caption}\n`;
+      const compactCaption = item.caption.replace(/\s+/g, "").toLowerCase();
+      const compactSize = item.size.replace(/\s+/g, "").toLowerCase();
+      const sizeSuffix =
+        item.size && !compactCaption.includes(compactSize)
+          ? ` · ${item.size}`
+          : "";
+      message += `• ${item.caption}${sizeSuffix}\n`;
       message += `  Unit $${item.unitPrice.toFixed(2)} × ${item.quantity} = Line subtotal *$${item.lineSubtotal.toFixed(2)}*\n`;
     });
     message += `\n`;
@@ -167,6 +175,12 @@ function buildWhatsAppOrderMessage(items, discountTiers) {
   message += `Shipping: ${shipping === 0 ? "FREE" : "$" + shipping.toFixed(2)}\n`;
   message += `*Total Amount:* $${finalTotal.toFixed(2)}`;
   return message;
+}
+
+function formatOrderSize(value) {
+  const size = String(value ?? "").trim();
+  if (!size) return "";
+  return /^\d+(?:\.\d+)?$/.test(size) ? `${size}ml` : size;
 }
 
 window.buildWhatsAppOrderMessage = buildWhatsAppOrderMessage;

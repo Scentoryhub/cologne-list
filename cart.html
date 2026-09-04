@@ -690,7 +690,7 @@
       </div>
     </div>
 
-    <script src="db.js?v=9"></script>
+    <script src="db.js?v=10"></script>
     <script>
       // ================= UI Logic =================
       function toggleSidebar() {
@@ -773,6 +773,20 @@
         window.dispatchEvent(new Event("storage"));
       }
 
+      function formatCartSize(value) {
+        const size = String(value ?? "").trim();
+        if (!size) return "";
+        return /^\d+(?:\.\d+)?$/.test(size) ? `${size}ml` : size;
+      }
+
+      function getCartDisplayTitle(item) {
+        const title = String(item.caption || item.name || "Product").trim();
+        const size = formatCartSize(item.ml);
+        if (!size) return title;
+        const escapedSize = size.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return title.replace(new RegExp(`\\s+\\(${escapedSize}\\)\\s*$`, "i"), "");
+      }
+
       function renderCart() {
         const cart = loadCart();
         cartItemsList.innerHTML = "";
@@ -795,8 +809,9 @@
         cart.forEach((item, index) => {
           const price = Number(item.price) || 0;
           const subtotal = (price * item.quantity).toFixed(2);
-          const displayTitle = item.caption;
+          const displayTitle = getCartDisplayTitle(item);
           const warehouseLabel = normalizeWarehouseLabel(item.warehouse);
+          const sizeLabel = formatCartSize(item.ml);
 
           const li = document.createElement("li");
           li.className = "cart-item";
@@ -815,6 +830,11 @@
                         <span class="info-label">Price</span>
                         <span>$${price.toFixed(2)}</span>
                     </div>
+
+                    ${sizeLabel ? `<div class="info-row">
+                        <span class="info-label">Size</span>
+                        <span>${sizeLabel}</span>
+                    </div>` : ""}
 
                     <div class="info-row">
                         <span class="info-label">Quantity</span>

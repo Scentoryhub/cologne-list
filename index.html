@@ -1841,7 +1841,7 @@
       </div>
     </div>
 
-    <script src="db.js?v=9"></script>
+    <script src="db.js?v=10"></script>
     <script>
       // ================= Catalog & Checkout Logic =================
       const WHATSAPP_NUMBER = "16232027321";
@@ -2371,12 +2371,21 @@
         );
       };
 
+      function getProductSizeValue(item) {
+        const variantWithSize = getProductVariants(item).find(
+          (variant) => String(variant?.ml ?? "").trim() !== "",
+        );
+        return variantWithSize ? String(variantWithSize.ml).trim() : "";
+      }
+
       function formatSize(item) {
-        if (!item.ml) return "";
-        if (isNaN(Number(item.ml))) return item.ml;
-        const ml = parseInt(item.ml);
+        const sizeValue = getProductSizeValue(item);
+        if (!sizeValue) return "";
+        if (isNaN(Number(sizeValue))) return sizeValue;
+        const ml = Number(sizeValue);
         const flOz = (ml / 29.57).toFixed(1);
-        return `${ml}ml <span style="color:#999;font-weight:normal">(${flOz} oz)</span>`;
+        const mlLabel = Number.isInteger(ml) ? ml.toFixed(0) : String(ml);
+        return `${mlLabel}ml <span style="color:#999;font-weight:normal">(${flOz} oz)</span>`;
       }
 
       function getGenderClass(genderText) {
@@ -2686,7 +2695,7 @@
       function isGiftSetProduct(product) {
         const id = getProductFamilyKey(product);
         const name = String(product.name || "").toUpperCase();
-        const size = String(product.ml || "").toUpperCase();
+        const size = String(getProductSizeValue(product)).toUpperCase();
         return (
           id === "A282" ||
           name.includes("SET") ||
@@ -2762,7 +2771,7 @@
                 </div>
                 <div class="scroll-card-price">
                     ${formatProductPrice(p)} ${stockHtml}
-                    <span style="font-size:0.75rem; color:#666; font-weight:normal; margin-left:5px;">${p.ml ? formatSize(p) : ""}</span>
+                    <span style="font-size:0.75rem; color:#666; font-weight:normal; margin-left:5px;">${formatSize(p)}</span>
                 </div>
                 <div class="btn-qty-wrapper" data-btn-wrap="${productRef}">${buttonHtml}</div>
             </div>
@@ -3486,18 +3495,14 @@
             normalizeWarehouseCode(item.warehouse) === warehouseCode,
         );
         if (!existing && delta > 0) {
-          let sizeLabel = product.ml
-            ? isNaN(Number(product.ml))
-              ? `(${product.ml})`
-              : `(${product.ml}ml)`
-            : "";
+          const productSize = getProductSizeValue(product);
           cartItems.push({
             name: product.id,
-            caption: `${product.id} - ${product.name} ${sizeLabel}`,
+            caption: `${product.id} - ${product.name}`,
             img: getProductImage(product),
             price: Number(product.price),
             brand: product.brand,
-            ml: product.ml,
+            ml: productSize,
             warehouse: product.warehouse,
             quantity: 1,
           });
