@@ -1895,6 +1895,7 @@
         { min: 40, max: 79, percent: 0.15 },
         { min: 80, max: Infinity, percent: 0.2 },
       ];
+      const MIN_DISPLAY_STOCK = 15;
       const MOBILE_BRAND_LIMIT = 10;
       const DEFAULT_PRODUCT_IMAGE =
         "data:image/svg+xml;charset=UTF-8," +
@@ -2031,10 +2032,8 @@
       }
 
       function isProductAvailable(product) {
-        const stock = product ? product.stock : "";
-        return stock === "" || stock === null || stock === undefined
-          ? true
-          : Number(stock) > 0;
+        const stock = Number(product && product.stock);
+        return Number.isFinite(stock) && stock >= MIN_DISPLAY_STOCK;
       }
 
       function hasValidPrice(product) {
