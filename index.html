@@ -1967,6 +1967,7 @@
 
       window.addEventListener("pageshow", function (event) {
         loadCart();
+        if (!window.perfumeDB || window.perfumeDB.length === 0) return;
         if (viewMode === "home") renderHome();
         else renderGridPage();
       });
@@ -2153,9 +2154,13 @@
       }
 
       function getProductDisplayTitle(product) {
-        return getSelectableWarehouseVariants(product).length > 1
-          ? String(product.name || "")
-          : `${product.id}-${product.name}`;
+        const displayCode =
+          getSelectableWarehouseVariants(product).length > 1
+            ? getProductFamilyKey(product)
+            : String(product.id || "");
+        return [displayCode, product.name]
+          .filter((value) => String(value || "").trim())
+          .join("-");
       }
 
       function groupProductsForDisplay(matches, universe) {
@@ -3335,6 +3340,7 @@
           }
           const globalSearch = document.getElementById("global-search-input");
           if (globalSearch) globalSearch.value = "";
+          renderHome();
           document.getElementById("home-view").style.display = "block";
           document.getElementById("grid-view").style.display = "none";
           const savedHomePosition = homeScrollPosition;
