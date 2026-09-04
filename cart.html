@@ -439,6 +439,87 @@
         text-decoration: none;
         border-radius: 4px;
       }
+
+      /* Website-owned confirmation dialog */
+      .cart-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.62);
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.2s ease,
+          visibility 0.2s ease;
+      }
+      .cart-confirm-overlay.open {
+        opacity: 1;
+        visibility: visible;
+      }
+      .cart-confirm-dialog {
+        width: min(360px, 100%);
+        padding: 24px;
+        border-top: 4px solid var(--accent-color);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+        transform: translateY(12px) scale(0.98);
+        transition: transform 0.2s ease;
+      }
+      .cart-confirm-overlay.open .cart-confirm-dialog {
+        transform: translateY(0) scale(1);
+      }
+      .cart-confirm-kicker {
+        margin-bottom: 8px;
+        color: #8a6a00;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+      }
+      .cart-confirm-title {
+        margin: 0;
+        color: #1f1f1f;
+        font-size: 1.35rem;
+        line-height: 1.2;
+      }
+      .cart-confirm-message {
+        margin: 10px 0 22px;
+        color: #666;
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .cart-confirm-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .cart-confirm-btn {
+        min-height: 46px;
+        border: 1px solid #d7d7d7;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .cart-confirm-cancel {
+        background: #fff;
+        color: #333;
+      }
+      .cart-confirm-submit {
+        border-color: #000;
+        background: #000;
+        color: #fff;
+      }
+      .cart-confirm-btn:focus-visible {
+        outline: 3px solid rgba(178, 137, 0, 0.3);
+        outline-offset: 2px;
+      }
     </style>
   </head>
   <body>
@@ -571,6 +652,44 @@
       </button>
     </div>
 
+    <div
+      id="cart-confirm-overlay"
+      class="cart-confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-hidden="true"
+      aria-labelledby="cart-confirm-title"
+      aria-describedby="cart-confirm-message"
+      onclick="handleCartConfirmBackdrop(event)"
+    >
+      <div class="cart-confirm-dialog">
+        <div class="cart-confirm-kicker">SHOPPING CART</div>
+        <h2 id="cart-confirm-title" class="cart-confirm-title">
+          Clear your cart?
+        </h2>
+        <p id="cart-confirm-message" class="cart-confirm-message">
+          This will remove all items from your cart.
+        </p>
+        <div class="cart-confirm-actions">
+          <button
+            type="button"
+            class="cart-confirm-btn cart-confirm-cancel"
+            onclick="closeCartConfirm()"
+          >
+            Keep Items
+          </button>
+          <button
+            type="button"
+            id="cart-confirm-submit"
+            class="cart-confirm-btn cart-confirm-submit"
+            onclick="confirmCartAction()"
+          >
+            Clear Cart
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="db.js?v=9"></script>
     <script>
       // ================= UI Logic =================
@@ -597,6 +716,16 @@
       const cartItemsList = document.getElementById("cart-items-list");
       const clearCartBtn = document.getElementById("clear-cart-btn");
       const sendOrderBtn = document.getElementById("send-order-btn");
+      const cartConfirmOverlay = document.getElementById(
+        "cart-confirm-overlay",
+      );
+      const cartConfirmTitle = document.getElementById("cart-confirm-title");
+      const cartConfirmMessage = document.getElementById(
+        "cart-confirm-message",
+      );
+      const cartConfirmSubmit = document.getElementById("cart-confirm-submit");
+      let pendingCartConfirmAction = null;
+      let cartConfirmReturnFocus = null;
 
       const summaryEls = {
         total: document.getElementById("total-price"),
@@ -786,20 +915,64 @@
       };
 
       window.removeItem = (index) => {
-        if (confirm("Remove this item?")) {
-          const cart = loadCart();
-          cart.splice(index, 1);
-          saveCart(cart);
-          renderCart();
-        }
+        openCartConfirm({
+          title: "Remove this item?",
+          message: "This item will be removed from your cart.",
+          confirmLabel: "Remove Item",
+          onConfirm: () => {
+            const cart = loadCart();
+            cart.splice(index, 1);
+            saveCart(cart);
+            renderCart();
+          },
+        });
       };
 
       clearCartBtn.onclick = () => {
-        if (confirm("Clear entire cart?")) {
-          localStorage.removeItem("perfumeCart");
-          renderCart();
-        }
+        openCartConfirm({
+          title: "Clear your cart?",
+          message: "This will remove all items from your cart.",
+          confirmLabel: "Clear Cart",
+          onConfirm: () => {
+            localStorage.removeItem("perfumeCart");
+            renderCart();
+          },
+        });
       };
+
+      function openCartConfirm({ title, message, confirmLabel, onConfirm }) {
+        cartConfirmReturnFocus = document.activeElement;
+        pendingCartConfirmAction = onConfirm;
+        cartConfirmTitle.textContent = title;
+        cartConfirmMessage.textContent = message;
+        cartConfirmSubmit.textContent = confirmLabel;
+        cartConfirmOverlay.classList.add("open");
+        cartConfirmOverlay.setAttribute("aria-hidden", "false");
+        requestAnimationFrame(() => cartConfirmSubmit.focus());
+      }
+
+      window.closeCartConfirm = function () {
+        cartConfirmOverlay.classList.remove("open");
+        cartConfirmOverlay.setAttribute("aria-hidden", "true");
+        pendingCartConfirmAction = null;
+        if (cartConfirmReturnFocus?.focus) cartConfirmReturnFocus.focus();
+      };
+
+      window.confirmCartAction = function () {
+        const action = pendingCartConfirmAction;
+        window.closeCartConfirm();
+        if (typeof action === "function") action();
+      };
+
+      window.handleCartConfirmBackdrop = function (event) {
+        if (event.target === cartConfirmOverlay) window.closeCartConfirm();
+      };
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && cartConfirmOverlay.classList.contains("open")) {
+          window.closeCartConfirm();
+        }
+      });
 
       // ================= FIXED SEND ORDER LOGIC =================
       sendOrderBtn.onclick = () => {
