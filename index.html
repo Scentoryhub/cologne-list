@@ -99,6 +99,7 @@
 
       .header-center {
         flex-grow: 1;
+        min-width: 0;
         display: flex;
         justify-content: flex-end;
       }
@@ -117,6 +118,57 @@
         background: #fff;
         color: #000;
         border-color: #fff;
+      }
+      .header-back-btn {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 44px;
+        height: 38px;
+        padding: 0 12px;
+        border: 1px solid #555;
+        border-radius: 6px;
+        background: #1d1d1d;
+        color: #fff;
+        cursor: pointer;
+        flex-shrink: 0;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        transition:
+          background 0.2s,
+          border-color 0.2s,
+          transform 0.2s;
+      }
+      .header-back-btn.visible {
+        display: flex;
+      }
+      .header-back-btn:hover,
+      .header-back-btn:focus-visible {
+        background: #333;
+        border-color: #d8b733;
+      }
+      .header-back-btn:active {
+        transform: translateY(1px);
+      }
+      .header-back-arrow {
+        font-size: 1.15rem;
+        line-height: 1;
+      }
+
+      @media (max-width: 519px) {
+        .site-header {
+          padding: 0 8px;
+          gap: 8px;
+        }
+        .header-back-btn {
+          width: 44px;
+          padding: 0;
+        }
+        .header-back-label {
+          display: none;
+        }
       }
 
       /* ================= 3. Sidebar ================= */
@@ -1043,18 +1095,59 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        gap: 12px;
+        min-height: 60px;
+        margin: -20px -12px 20px;
+        padding: 12px;
+        position: sticky;
+        top: var(--header-height);
+        z-index: 980;
+        background: rgba(248, 248, 248, 0.97);
+        border-bottom: 1px solid #e3e3e3;
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.08);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
       }
       .gallery-title {
         font-size: 1.3rem;
         font-weight: 700;
+        line-height: 1.2;
+        min-width: 0;
       }
       .back-home-btn {
-        font-size: 0.9rem;
-        text-decoration: underline;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 8px 11px;
+        border: 1px solid #d5d5d5;
+        border-radius: 999px;
+        background: #fff;
+        font-size: 0.82rem;
+        font-weight: 700;
         cursor: pointer;
-        color: #666;
-        padding: 5px;
+        color: #555;
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+      .back-home-btn:hover,
+      .back-home-btn:focus-visible {
+        border-color: #b28900;
+        color: #7b6020;
+      }
+      @media (max-width: 519px) {
+        .gallery-header-bar {
+          min-height: 56px;
+          padding: 9px 12px;
+        }
+        .gallery-title {
+          font-size: 1.05rem;
+        }
+        .back-home-btn {
+          min-height: 38px;
+          padding: 7px 10px;
+          font-size: 0.76rem;
+        }
       }
       .gallery {
         display: grid;
@@ -1418,6 +1511,17 @@
           placeholder="Search..."
         />
       </div>
+      <button
+        type="button"
+        id="header-back-btn"
+        class="header-back-btn"
+        onclick="handleMenuClick('Home')"
+        aria-label="Back to Home"
+        title="Back to Home"
+      >
+        <span class="header-back-arrow" aria-hidden="true">←</span>
+        <span class="header-back-label">BACK</span>
+      </button>
     </header>
 
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
@@ -2792,6 +2896,7 @@
       // --- Grid Render ---
       function switchToGrid(criteria) {
         viewMode = "grid";
+        setGridNavigationVisible(true);
         document.getElementById("sidebar").classList.remove("active");
         document.getElementById("sidebar-overlay").classList.remove("active");
         document.getElementById("home-view").style.display = "none";
@@ -3125,6 +3230,9 @@
         document.getElementById("sidebar-overlay").classList.remove("active");
         if (action === "Home") {
           viewMode = "home";
+          setGridNavigationVisible(false);
+          const globalSearch = document.getElementById("global-search-input");
+          if (globalSearch) globalSearch.value = "";
           document.getElementById("home-view").style.display = "block";
           document.getElementById("grid-view").style.display = "none";
           window.scrollTo({ top: 0 });
@@ -3136,6 +3244,7 @@
           document.getElementById("home-view").style.display = "block";
           document.getElementById("grid-view").style.display = "none";
           viewMode = "home";
+          setGridNavigationVisible(false);
         }
         document.getElementById("sidebar").classList.remove("active");
         document.getElementById("sidebar-overlay").classList.remove("active");
@@ -3158,6 +3267,13 @@
           } else switchToGrid(brandName === "Other" ? "Other" : brandName);
         }, 50);
       };
+
+      function setGridNavigationVisible(visible) {
+        const headerBackButton = document.getElementById("header-back-btn");
+        if (headerBackButton) {
+          headerBackButton.classList.toggle("visible", Boolean(visible));
+        }
+      }
 
       function setupMenu() {
         const trigger = document.getElementById("menu-trigger");
