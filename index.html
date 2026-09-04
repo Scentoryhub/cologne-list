@@ -1518,6 +1518,12 @@
         <nav>
           <a class="menu-link" onclick="handleMenuClick('Home')">Home</a>
           <a class="menu-link" onclick="handleMenuClick('All')">Shop All</a>
+          <a class="menu-link" onclick="handleMenuClick('HotSelling')"
+            >Hot Selling</a
+          >
+          <a class="menu-link" onclick="handleMenuClick('NewArrival')"
+            >New Arrivals</a
+          >
           <a
             class="menu-link"
             onclick="handleMenuClick('Gender:Women')"
@@ -1908,6 +1914,7 @@
       const itemsPerPage = 20;
       let currentGridData = [];
       let viewMode = "home";
+      let homeScrollPosition = 0;
       let currentModalProductRef = null;
       let activeWarehouseCode = "";
       let expandedWarehouseCode = "";
@@ -1929,7 +1936,9 @@
         const checkDataInterval = setInterval(() => {
           if (window.perfumeDB && window.perfumeDB.length > 0) {
             clearInterval(checkDataInterval);
-            renderHome();
+            const initialView = getInitialViewFromHash();
+            if (initialView) switchToGrid(initialView);
+            else renderHome();
           }
         }, 50);
       });
@@ -2567,6 +2576,9 @@
       // --- Home Render Logic ---
       function renderHome() {
         ensureActiveWarehouse();
+        const allAvailableProducts = (window.perfumeDB || []).filter(
+          isProductAvailable,
+        );
         const db = (window.perfumeDB || []).filter(
           (product) =>
             isProductAvailable(product) &&
@@ -2576,6 +2588,34 @@
         if (!container) return;
         container.innerHTML = "";
         renderWarehouseMenu();
+
+        const hotSellingItems = getRankedProducts(
+          allAvailableProducts,
+          "hot_selling_weight",
+        );
+        if (hotSellingItems.length > 0) {
+          const hotSellingSection = createBrandSection(
+            "Hot Selling",
+            hotSellingItems,
+            "HotSelling",
+          );
+          hotSellingSection.id = "home-hot-selling";
+          container.appendChild(hotSellingSection);
+        }
+
+        const newArrivalItems = getRankedProducts(
+          allAvailableProducts,
+          "new_arrival_weight",
+        );
+        if (newArrivalItems.length > 0) {
+          const newArrivalSection = createBrandSection(
+            "New Arrivals",
+            newArrivalItems,
+            "NewArrival",
+          );
+          newArrivalSection.id = "home-new-arrivals";
+          container.appendChild(newArrivalSection);
+        }
 
         const getWarehouseCriteria = (filterKey) => {
           if (filterKey === "Other") return `WarehouseOther:${activeWarehouseCode}`;
@@ -2879,6 +2919,9 @@
 
       // --- Grid Render ---
       function switchToGrid(criteria) {
+        if (viewMode === "home") {
+          homeScrollPosition = window.scrollY || window.pageYOffset || 0;
+        }
         viewMode = "grid";
         setGridNavigationVisible(true);
         document.getElementById("sidebar").classList.remove("active");
@@ -3215,11 +3258,23 @@
         if (action === "Home") {
           viewMode = "home";
           setGridNavigationVisible(false);
+          if (window.location.hash) {
+            history.replaceState(
+              null,
+              "",
+              window.location.pathname + window.location.search,
+            );
+          }
           const globalSearch = document.getElementById("global-search-input");
           if (globalSearch) globalSearch.value = "";
           document.getElementById("home-view").style.display = "block";
           document.getElementById("grid-view").style.display = "none";
-          window.scrollTo({ top: 0 });
+          const savedHomePosition = homeScrollPosition;
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: savedHomePosition, behavior: "auto" });
+            });
+          });
         } else switchToGrid(action);
       };
 
@@ -3257,6 +3312,13 @@
         if (headerBackButton) {
           headerBackButton.classList.toggle("visible", Boolean(visible));
         }
+      }
+
+      function getInitialViewFromHash() {
+        const route = String(window.location.hash || "").toLowerCase();
+        if (route === "#hot-selling") return "HotSelling";
+        if (route === "#new-arrivals") return "NewArrival";
+        return "";
       }
 
       function setupMenu() {
