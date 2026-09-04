@@ -824,6 +824,28 @@
         text-align: center;
         font-family: inherit;
       }
+      .qty-warehouse-switch {
+        align-self: stretch;
+        border: 0;
+        background: #fff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: background 0.18s ease;
+      }
+      .qty-warehouse-switch:hover,
+      .qty-warehouse-switch:focus-visible {
+        background: #fff7d6;
+        outline: none;
+      }
+      .qty-warehouse-code {
+        color: #8a6a00;
+        font-size: 0.68rem;
+        font-weight: 900;
+        letter-spacing: 0.05em;
+      }
 
       .btn-qty-wrapper {
         width: 100%;
@@ -2540,23 +2562,48 @@
         return `<div class="img-wrapper skeleton-loader"><picture><source srcset="${webpSrc}" type="image/webp"><img src="${imageSrc}" alt="${alt}" loading="lazy" class="lazy-img" onload="this.classList.add('loaded'); this.parentElement.parentElement.classList.remove('skeleton-loader');" onerror="handleProductImageError(this); this.parentElement.parentElement.classList.remove('skeleton-loader');"></picture></div>`;
       }
 
-      function getCartQtyForProduct(product) {
+      function getCartItemsForProduct(product) {
         const variantKeys = new Set(
           getProductVariants(product).map(
             (variant) =>
               `${normalizeSku(variant.id)}::${normalizeWarehouseCode(variant.warehouse)}`,
           ),
         );
-        return cartItems.reduce(
-          (total, item) =>
-            total +
-            (variantKeys.has(
-              `${normalizeSku(item.name)}::${normalizeWarehouseCode(item.warehouse)}`,
-            )
-              ? Number(item.quantity) || 0
-              : 0),
+        return cartItems.filter((item) =>
+          variantKeys.has(
+            `${normalizeSku(item.name)}::${normalizeWarehouseCode(item.warehouse)}`,
+          ),
+        );
+      }
+
+      function getCartQtyForProduct(product) {
+        return getCartItemsForProduct(product).reduce(
+          (total, item) => total + (Number(item.quantity) || 0),
           0,
         );
+      }
+
+      function getDirectCartVariant(product, variants) {
+        const cartMatches = getCartItemsForProduct(product);
+        if (cartMatches.length === 0) return null;
+        const directWarehouseCode =
+          cartMatches.length === 1
+            ? normalizeWarehouseCode(cartMatches[0].warehouse)
+            : getRecommendedWarehouse(variants).code;
+        const variant = variants.find(
+          (item) =>
+            normalizeWarehouseCode(item.warehouse) === directWarehouseCode,
+        );
+        if (!variant) return null;
+        const cartItem = cartMatches.find(
+          (item) =>
+            normalizeWarehouseCode(item.warehouse) === directWarehouseCode,
+        );
+        return {
+          variant,
+          quantity: Number(cartItem?.quantity) || 0,
+          warehouseCode: directWarehouseCode,
+        };
       }
 
       function getAddButtonHtml(productRef) {
@@ -2567,8 +2614,20 @@
         }
         const qty = getCartQtyForProduct(product);
         if (variants.length > 1) {
-          const label = qty > 0 ? `${qty} IN CART · ADD MORE` : "ADD TO CART";
-          return `<button class="action-btn-black" onclick="openWarehouseChoiceByRef('${productRef}'); event.stopPropagation();">${label}</button>`;
+          const directCartVariant = getDirectCartVariant(product, variants);
+          if (!directCartVariant) {
+            return `<button class="action-btn-black" onclick="openWarehouseChoiceByRef('${productRef}'); event.stopPropagation();">ADD TO CART</button>`;
+          }
+          const directRef = getProductReference(directCartVariant.variant);
+          return `
+                <div class="action-qty-box">
+                    <div class="qty-btn-rect" onclick="updateItemQty('${directRef}', -1); event.stopPropagation();">-</div>
+                    <button type="button" class="qty-val-rect qty-warehouse-switch" aria-label="Change warehouse. Currently ${directCartVariant.warehouseCode}" onclick="openWarehouseChoiceByRef('${productRef}'); event.stopPropagation();">
+                      <span>${directCartVariant.quantity || qty}</span>
+                      <span class="qty-warehouse-code">${directCartVariant.warehouseCode}</span>
+                    </button>
+                    <div class="qty-btn-rect" onclick="updateItemQty('${directRef}', 1); event.stopPropagation();">+</div>
+                </div>`;
         }
         if (qty === 0) {
           return `<button class="action-btn-black" onclick="updateItemQty('${productRef}', 1); event.stopPropagation();">ADD TO CART</button>`;
