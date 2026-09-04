@@ -198,8 +198,13 @@
         justify-content: space-between;
         align-items: flex-start;
         margin-bottom: 8px;
-        height: 2.6em;
-        overflow: hidden;
+        min-height: 2.6em;
+        height: auto;
+        overflow: visible;
+      }
+      .item-header > div:first-child {
+        flex: 1;
+        min-width: 0;
       }
       .item-title {
         font-family: "Times New Roman", serif;
@@ -446,7 +451,7 @@
       <div class="header-title">SHOPPING CART</div>
 
       <div class="header-right" onclick="handleBack()">
-        <span>◀ BACK</span>
+        <span>BACK</span>
       </div>
     </header>
 
