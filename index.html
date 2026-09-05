@@ -1863,7 +1863,7 @@
       </div>
     </div>
 
-    <script src="db.js?v=10"></script>
+    <script src="db.js?v=11"></script>
     <script>
       // ================= Catalog & Checkout Logic =================
       const WHATSAPP_NUMBER = "16232027321";
@@ -1932,6 +1932,7 @@
         );
 
       let cartItems = [];
+      let checkoutChecking = false;
       let currentPage = 1;
       const itemsPerPage = 20;
       let currentGridData = [];
@@ -2299,8 +2300,8 @@
         }
         if (checkoutButton) {
           const isEmpty = totalQty === 0;
-          checkoutButton.disabled = isEmpty;
-          checkoutButton.setAttribute("aria-disabled", String(isEmpty));
+          checkoutButton.disabled = isEmpty || checkoutChecking;
+          checkoutButton.setAttribute("aria-disabled", String(isEmpty || checkoutChecking));
         }
         if (totalQty > 0) {
           badgeEl.textContent = totalQty;
@@ -2383,19 +2384,38 @@
         };
       }
 
-      window.sendOrderToWhatsApp = function () {
+      window.sendOrderToWhatsApp = async function () {
+        if (checkoutChecking) return;
         loadCart();
         if (cartItems.length === 0) {
-          alert("Cart is empty");
+          showToast("Your cart is empty.");
           return;
         }
-
-        const msg = buildWhatsAppOrderMessage(cartItems, discountTiers);
-        const encodedMsg = encodeURIComponent(msg);
-        window.open(
-          `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMsg}`,
-          "_blank",
-        );
+        checkoutChecking = true;
+        updateWholesaleBanner();
+        showToast("Checking the latest prices and inventory...");
+        try {
+          const products = await fetchLatestProductData();
+          loadCart();
+          const result = reconcileCart(cartItems, products);
+          if (result.changes.length) {
+            // The cart page explains each change and requires approval.
+            window.location.href = "cart.html";
+            return;
+          }
+          if (!result.items.length) return;
+          cartItems = result.items;
+          saveCart();
+          const msg = buildWhatsAppOrderMessage(cartItems, discountTiers);
+          // Same-tab navigation also works after async checks on mobile browsers.
+          window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+        } catch (error) {
+          showToast("Could not verify current stock. Please try Checkout again.");
+        } finally {
+          checkoutChecking = false;
+          updateWholesaleBanner();
+          refreshProductButtons();
+        }
       };
 
       function getProductSizeValue(item) {
@@ -2939,30 +2959,30 @@
       function normalizeSearchText(text) {
         return (text || "")
           .toString()
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
+          .replace(/(\d+(?:[.,]\d+)?)\s*(?:milliliters?|millilitres?|ml)\b/g,
+            (_, size) => `${size.replace(",", ".")}ml`)
           .replace(/&/g, " and ")
           .replace(/[^a-z0-9]+/g, " ")
           .trim()
           .replace(/\s+/g, " ");
       }
 
+      function getBrandSearchMatch(rawTerm) {
+        const term = ` ${normalizeSearchText(rawTerm)} `;
+        const candidates = [
+          ...Object.entries(BRAND_ALIASES),
+          ...FEATURED_BRANDS.map((brand) => [brand, brand]),
+          ...(window.perfumeDB || []).map((p) => [p.brand, p.brand]),
+        ].map(([alias, brand]) => ({ alias: normalizeSearchText(alias), brand }))
+          .filter((entry) => entry.alias)
+          .sort((a, b) => b.alias.length - a.alias.length);
+        return candidates.find((entry) => term.includes(` ${entry.alias} `)) || null;
+      }
       function detectBrandIntent(rawTerm) {
-        const lowerTerm = normalizeSearchText(rawTerm);
-        const compactTerm = lowerTerm
-          .replace(/\band\b/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-        const tokens = lowerTerm.split(/\s+/);
-        for (const [key, brandName] of Object.entries(BRAND_ALIASES)) {
-          const normalizedKey = normalizeSearchText(key);
-          if (lowerTerm === normalizedKey || lowerTerm.includes(normalizedKey))
-            return brandName;
-          if (compactTerm && compactTerm === normalizedKey) return brandName;
-        }
-        for (const token of tokens) {
-          if (BRAND_ALIASES[token]) return BRAND_ALIASES[token];
-        }
-        return null;
+        return getBrandSearchMatch(rawTerm)?.brand || null;
       }
       function normalizeAndTokenize(rawTerm) {
         return normalizeSearchText(rawTerm)
@@ -2974,20 +2994,37 @@
         const pId = normalizeSearchText(product.id);
         const pName = normalizeSearchText(product.name);
         const pBrand = normalizeSearchText(product.brand);
+        const pSize = normalizeSearchText(formatOrderSize(product.ml));
         searchTokens.forEach((token) => {
           if (token.length < 1) return;
           if (pId.includes(token)) score += 100;
           if (pBrand.includes(token)) score += 60;
           if (pName.includes(token)) score += 50;
+          if (pSize.includes(token)) score += 50;
         });
         return score;
       }
       function matchesAllSearchTokens(product, searchTokens) {
         if (searchTokens.length === 0) return false;
         const haystack = normalizeSearchText(
-          `${product.id || ""} ${product.brand || ""} ${product.name || ""}`,
+          `${product.id || ""} ${product.brand || ""} ${product.name || ""} ${formatOrderSize(product.ml)}`,
         );
-        return searchTokens.every((token) => haystack.includes(token));
+        const words = haystack.split(" ");
+        return searchTokens.every((token) =>
+          token.length <= 2 ? words.includes(token) : haystack.includes(token));
+      }
+
+      function searchProducts(products, rawTerm) {
+        const brandMatch = getBrandSearchMatch(rawTerm);
+        const term = normalizeSearchText(rawTerm);
+        const tokens = normalizeAndTokenize(brandMatch
+          ? ` ${term} `.replace(` ${brandMatch.alias} `, " ") : term);
+        return products.filter((p) =>
+          (!brandMatch || normalizeSearchText(p.brand) === normalizeSearchText(brandMatch.brand)) &&
+          (tokens.length ? matchesAllSearchTokens(p, tokens) : Boolean(brandMatch)))
+          .map((product) => ({ product, score: calculateRelevanceScore(product, tokens) }))
+          .sort((a, b) => b.score - a.score)
+          .map((entry) => entry.product);
       }
 
       // --- Grid Render ---
@@ -3086,58 +3123,8 @@
                 : "Unisex Collection";
         } else if (criteria.startsWith("Search:")) {
           const rawTerm = criteria.replace("Search:", "").trim();
-          const targetBrand = detectBrandIntent(rawTerm);
-          const searchTokens = normalizeAndTokenize(rawTerm);
-          if (targetBrand) {
-            let brandProducts = db.filter(
-              (p) =>
-                normalizeSearchText(p.brand) ===
-                normalizeSearchText(targetBrand),
-            );
-            let remainingTokens = searchTokens.filter(
-              (t) =>
-                !Object.keys(BRAND_ALIASES).some(
-                  (k) => {
-                    const normalizedKey = normalizeSearchText(k);
-                    return (
-                      BRAND_ALIASES[k] === targetBrand &&
-                      (normalizedKey.includes(t) || t.includes(normalizedKey))
-                    );
-                  },
-                ),
-            );
-            if (remainingTokens.length > 0) {
-              let scored = brandProducts
-                .map((p) => ({
-                  product: p,
-                  score: calculateRelevanceScore(p, remainingTokens),
-                }))
-                .filter(
-                  (item) =>
-                    item.score > 0 &&
-                    matchesAllSearchTokens(item.product, remainingTokens),
-                );
-              scored.sort((a, b) => b.score - a.score);
-              filtered = scored.map((item) => item.product);
-            } else {
-              filtered = brandProducts;
-            }
-            title = `Brand Results: "${targetBrand}"`;
-          } else {
-            let scoredProducts = db
-              .map((p) => ({
-                product: p,
-                score: calculateRelevanceScore(p, searchTokens),
-              }))
-              .filter(
-                (item) =>
-                  item.score > 0 &&
-                  matchesAllSearchTokens(item.product, searchTokens),
-              );
-            scoredProducts.sort((a, b) => b.score - a.score);
-            filtered = scoredProducts.map((item) => item.product);
-            title = `Results: "${rawTerm}"`;
-          }
+          filtered = searchProducts(db, rawTerm);
+          title = `Results: "${rawTerm}"`;
           filtered = groupProductsForDisplay(filtered, db);
         } else if (criteria === "Other") {
           filtered = db.filter((p) => {
@@ -3545,9 +3532,14 @@
       }
 
       window.updateItemQty = function (productRef, delta) {
+        if (checkoutChecking || ![1, -1].includes(delta)) return;
+        loadCart();
         const product = getRenderableProductByRef(productRef);
-        if (!product) return;
-        if (!hasValidPrice(product)) {
+        if (!product) {
+          showToast("This item is no longer available. Please review your cart.");
+          return;
+        }
+        if (delta > 0 && !hasValidPrice(product)) {
           showToast("Price is pending for this item.");
           return;
         }
@@ -3559,6 +3551,13 @@
             normalizeSku(item.name) === sku &&
             normalizeWarehouseCode(item.warehouse) === warehouseCode,
         );
+        const warehouseQuantity = cartItems.filter((item) =>
+          cartStockKey(item.name, item.warehouse) === cartStockKey(product.id, product.warehouse))
+          .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+        if (delta > 0 && warehouseQuantity + delta > getOrderStockLimit(product)) {
+          showToast(`Only ${getOrderStockLimit(product)} available in ${warehouseCode} Warehouse.`);
+          return;
+        }
         if (!existing && delta > 0) {
           const productSize = getProductSizeValue(product);
           cartItems.push({
@@ -3573,7 +3572,7 @@
           });
           showToast("Added to Cart! 🛒");
         } else if (existing) {
-          existing.quantity += delta;
+          existing.quantity = (Number(existing.quantity) || 0) + delta;
           if (existing.quantity <= 0)
             cartItems = cartItems.filter(
               (item) =>
@@ -3595,7 +3594,7 @@
       }
 
       function loadCart() {
-        cartItems = JSON.parse(localStorage.getItem("perfumeCart") || "[]");
+        cartItems = readStoredCart();
         updateCartCount();
         updateWholesaleBanner();
       }

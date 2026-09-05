@@ -7,6 +7,10 @@ const SHEET_URL =
 
 // 缓存时间 (1分钟)
 const CACHE_DURATION = 1 * 60 * 1000;
+const PRODUCT_CACHE_KEY = "perfumeDB_Warehouse_Data_V11";
+const PRODUCT_TIME_KEY = "perfumeDB_Warehouse_Time_V11";
+const MIN_ORDER_STOCK = 15;
+let latestProductRequest = null;
 
 window.perfumeDB = [];
 
@@ -16,8 +20,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function initProductData() {
   // Use a dedicated cache version for the warehouse-based catalog.
-  const cacheKey = "perfumeDB_Warehouse_Data_V10";
-  const timeKey = "perfumeDB_Warehouse_Time_V10";
+  const cacheKey = PRODUCT_CACHE_KEY;
+  const timeKey = PRODUCT_TIME_KEY;
   const fallbackKey = "perfumeDB_Last_Valid_Data";
 
   const now = new Date().getTime();
@@ -47,17 +51,7 @@ async function initProductData() {
   // 2. 下载新数据
   console.log("🌐 下载最新数据...");
   try {
-    const response = await fetch(`${SHEET_URL}&_=${now}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("网络响应错误");
-    const data = await response.text();
-    const products = parseCSV(data);
-    if (products.length === 0) throw new Error("产品数据为空");
-    window.perfumeDB = products;
-
-    // 存入缓存
-    localStorage.setItem(cacheKey, JSON.stringify(window.perfumeDB));
-    localStorage.setItem(timeKey, now);
-    localStorage.setItem(fallbackKey, JSON.stringify(window.perfumeDB));
+    await fetchLatestProductData();
 
     runPageLogic();
   } catch (error) {
@@ -66,6 +60,7 @@ async function initProductData() {
     const fallbackProducts =
       cachedProducts ||
       readValidCache(localStorage.getItem(fallbackKey)) ||
+      readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V10")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V9")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V8")) ||
       readValidCache(localStorage.getItem("perfumeDB_Warehouse_Data_V7")) ||
@@ -74,9 +69,131 @@ async function initProductData() {
     if (fallbackProducts) {
       window.perfumeDB = fallbackProducts;
       runPageLogic();
-      alert("网络较慢，已加载离线数据");
+      if (typeof showToast === "function") {
+        showToast("Showing saved products. Checkout requires a live inventory check.");
+      }
     }
   }
+}
+
+// Checkout must use a successful network response, never an offline fallback.
+async function fetchLatestProductData() {
+  if (latestProductRequest) return latestProductRequest;
+  latestProductRequest = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`${SHEET_URL}&_=${Date.now()}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Could not load the latest inventory.");
+      const products = parseCSV(await response.text());
+      const required = ["id", "warehouse", "name", "price", "stock"];
+      if (!products.length || products.some((p) =>
+        required.some((field) => !Object.prototype.hasOwnProperty.call(p, field)))) {
+        throw new Error("The inventory data is incomplete. Please try again later.");
+      }
+      const keys = products.map((p) => cartStockKey(p.id, p.warehouse));
+      if (products.some((p) => !String(p.id).trim() || !String(p.warehouse).trim()) ||
+          new Set(keys).size !== keys.length) {
+        throw new Error("The inventory data needs to be checked. Please try again later.");
+      }
+      window.perfumeDB = products;
+      try {
+        const data = JSON.stringify(products);
+        localStorage.setItem(PRODUCT_CACHE_KEY, data);
+        localStorage.setItem(PRODUCT_TIME_KEY, String(Date.now()));
+        localStorage.setItem("perfumeDB_Last_Valid_Data", data);
+      } catch (error) {
+        console.warn("Product cache could not be saved.", error);
+      }
+      return products;
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
+  try {
+    return await latestProductRequest;
+  } finally {
+    latestProductRequest = null;
+  }
+}
+
+function cartStockKey(sku, warehouse) {
+  const code = String(warehouse || "").trim().toUpperCase().replace(/\s+WAREHOUSE$/, "").trim();
+  return `${String(sku || "").trim().toUpperCase()}::${code}`;
+}
+
+function readStoredCart() {
+  try {
+    const cart = JSON.parse(localStorage.getItem("perfumeCart") || "[]");
+    return Array.isArray(cart) ? cart.filter((item) => item && typeof item === "object") : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function getCartProduct(item, products = window.perfumeDB) {
+  const key = cartStockKey(item.name, item.warehouse);
+  return (products || []).find((p) => cartStockKey(p.id, p.warehouse) === key);
+}
+
+function getOrderStockLimit(product) {
+  const stock = Number(product?.stock);
+  const price = Number(product?.price);
+  return Number.isFinite(stock) && stock >= MIN_ORDER_STOCK &&
+    Number.isFinite(price) && price > 0 ? Math.floor(stock) : 0;
+}
+
+// Pure reconciliation: preserve the chosen warehouse and ask before applying changes.
+function reconcileCart(items, products) {
+  const updatedItems = [];
+  const changes = [];
+  const allocated = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const product = getCartProduct(item, products);
+    const label = String(item.name || "Product");
+    const limit = getOrderStockLimit(product);
+    if (!limit) {
+      const reason = !product ? "no longer listed in this warehouse" :
+        !(Number(product.price) > 0) ? "price pending" : "out of stock or unavailable";
+      changes.push(`${label}: removed (${reason}).`);
+      return;
+    }
+    const key = cartStockKey(product.id, product.warehouse);
+    const rawQuantity = Number(item.quantity);
+    const remaining = Math.max(0, limit - (allocated.get(key) || 0));
+    const quantity = Number.isFinite(rawQuantity)
+      ? Math.max(0, Math.min(Math.floor(rawQuantity), remaining)) : 0;
+    if (!quantity) {
+      changes.push(`${label}: removed (invalid quantity or stock limit reached).`);
+      return;
+    }
+    allocated.set(key, (allocated.get(key) || 0) + quantity);
+    if (quantity !== rawQuantity) {
+      changes.push(`${label}: quantity ${item.quantity} → ${quantity} (available: ${limit}).`);
+    }
+    if (Number(item.price) !== Number(product.price)) {
+      changes.push(`${label}: price $${(Number(item.price) || 0).toFixed(2)} → $${Number(product.price).toFixed(2)}.`);
+    }
+    const size = String(product.ml ?? "").trim();
+    if (String(item.ml ?? "").trim() !== size) {
+      changes.push(`${label}: size updated to ${formatOrderSize(size) || "not specified"}.`);
+    }
+    updatedItems.push({
+      ...item,
+      name: product.id,
+      caption: `${product.id} - ${product.name}`,
+      brand: product.brand,
+      img: product.img,
+      warehouse: product.warehouse,
+      ml: size,
+      price: Number(product.price),
+      quantity,
+    });
+  });
+  return { items: updatedItems, changes };
 }
 
 function runPageLogic() {
@@ -187,41 +304,38 @@ window.buildWhatsAppOrderMessage = buildWhatsAppOrderMessage;
 window.getShippingCost = getShippingCost;
 
 function parseCSV(csvText) {
-  const lines = csvText.trim().split("\n");
-  if (lines.length < 2) return [];
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+  const text = String(csvText).replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') { value += '"'; i++; }
+      else quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(value.trim()); value = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      row.push(value.trim()); rows.push(row); row = []; value = "";
+      if (char === "\r" && text[i + 1] === "\n") i++;
+    } else value += char;
+  }
+  if (quoted) throw new Error("Incomplete quoted product data.");
+  if (value || row.length) { row.push(value.trim()); rows.push(row); }
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((header) => header.trim().toLowerCase());
+  if (new Set(headers).size !== headers.length) throw new Error("Duplicate product columns.");
 
-  // 🔹 注意：这里会将所有表头转为小写 (toLowerCase)
-  // 所以表格里的 "Notes" -> "notes", "Inventory" -> "inventory"
-  const headers = lines[0]
-    .trim()
-    .split(",")
-    .map((h) => h.trim().toLowerCase());
-
-  return lines
+  return rows
     .slice(1)
-    .map((line) => {
-      // 处理 CSV 中的逗号和引号
-      const values = [];
-      let current = "";
-      let inQuote = false;
-      for (let char of line) {
-        if (char === '"') {
-          inQuote = !inQuote;
-        } else if (char === "," && !inQuote) {
-          values.push(current.trim());
-          current = "";
-        } else {
-          current += char;
-        }
-      }
-      values.push(current.trim());
-
+    .filter((values) => values.some((cell) => cell !== ""))
+    .map((values) => {
       const obj = {};
-      // 如果列数不匹配，跳过
-      if (values.length < headers.length) return null;
+      if (values.length !== headers.length) throw new Error("Incomplete product row.");
 
       headers.forEach((header, index) => {
-        let val = values[index] ? values[index].replace(/^"|"$/g, "") : "";
+        let val = values[index] || "";
 
         // Keep empty numeric cells empty so pending prices and stock can be
         // distinguished from an intentional numeric zero.
@@ -245,6 +359,5 @@ function parseCSV(csvText) {
       obj.inventory = obj.inventory === undefined ? obj.stock : obj.inventory;
 
       return obj;
-    })
-    .filter((item) => item !== null);
+    });
 }
